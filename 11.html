@@ -1,0 +1,4777 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>EventAlert · 2026实时活动报名提醒</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --primary: #6366f1;
+            --primary-dark: #4f46e5;
+            --secondary: #ec4899;
+            --accent: #8b5cf6;
+            --bg-dark: #0f172a;
+            --bg-card: rgba(30, 41, 59, 0.85);
+            --glass-bg: rgba(255, 255, 255, 0.08);
+            --glass-border: 1px solid rgba(255, 255, 255, 0.18);
+            --glass-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
+            --text-primary: #f8fafc;
+            --text-secondary: #cbd5e1;
+            --text-muted: #94a3b8;
+            --success: #10b981;
+            --warning: #f59e0b;
+            --danger: #ef4444;
+            --info: #3b82f6;
+            --vip-gold: #fbbf24;
+            --vip-premium: #a855f7;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Plus Jakarta Sans', sans-serif;
+            background: var(--bg-dark);
+            color: var(--text-primary);
+            overflow-x: hidden;
+            min-height: 100vh;
+        }
+
+        /* 动态背景 */
+        .ambient-bg {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: -1;
+            overflow: hidden;
+        }
+
+        .orb {
+            position: absolute;
+            border-radius: 50%;
+            filter: blur(80px);
+            opacity: 0.4;
+            animation: float 20s infinite ease-in-out;
+        }
+
+        .orb-1 { width: 600px; height: 600px; background: linear-gradient(135deg, var(--primary), var(--accent)); top: -200px; left: -200px; }
+        .orb-2 { width: 500px; height: 500px; background: linear-gradient(135deg, var(--secondary), var(--primary)); bottom: -150px; right: -150px; animation-delay: -5s; }
+        .orb-3 { width: 400px; height: 400px; background: linear-gradient(135deg, var(--accent), var(--secondary)); top: 50%; left: 50%; transform: translate(-50%, -50%); animation-delay: -10s; }
+
+        @keyframes float {
+            0%, 100% { transform: translate(0, 0) scale(1); }
+            33% { transform: translate(30px, -30px) scale(1.1); }
+            66% { transform: translate(-20px, 20px) scale(0.9); }
+        }
+
+        /* 加载动画 */
+        .loader {
+            position: fixed;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: var(--bg-dark);
+            z-index: 99999;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: opacity 0.5s;
+        }
+        .loader.hidden { opacity: 0; pointer-events: none; }
+        .loader-spinner {
+            width: 60px; height: 60px;
+            border: 3px solid rgba(255,255,255,0.1);
+            border-top-color: var(--primary);
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+
+        /* 强制登录弹窗 */
+        .force-auth-overlay {
+            position: fixed;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(15, 23, 42, 0.95);
+            backdrop-filter: blur(20px);
+            z-index: 10000;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            opacity: 0;
+            visibility: hidden;
+            transition: all 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        .force-auth-overlay.active { opacity: 1; visibility: visible; }
+
+        .auth-container {
+            width: 90%;
+            max-width: 1200px;
+            height: 90vh;
+            background: var(--glass-bg);
+            border: var(--glass-border);
+            border-radius: 32px;
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            overflow: hidden;
+            box-shadow: var(--glass-shadow);
+            transform: scale(0.9) translateY(20px);
+            transition: transform 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+            position: relative;
+        }
+        .force-auth-overlay.active .auth-container { transform: scale(1) translateY(0); }
+
+        .skip-top-btn {
+            position: absolute;
+            top: 2rem;
+            right: 2rem;
+            z-index: 100;
+            background: rgba(255, 255, 255, 0.1);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            color: var(--text-secondary);
+            padding: 0.75rem 1.5rem;
+            border-radius: 999px;
+            cursor: pointer;
+            transition: all 0.3s;
+            font-size: 0.9rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            backdrop-filter: blur(10px);
+        }
+        .skip-top-btn:hover {
+            background: rgba(255, 255, 255, 0.2);
+            color: var(--text-primary);
+            transform: translateY(-2px);
+        }
+
+        .auth-left {
+            background: linear-gradient(135deg, rgba(99, 102, 241, 0.2), rgba(236, 72, 153, 0.2));
+            padding: 4rem;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            position: relative;
+            overflow: hidden;
+        }
+        .auth-left::before {
+            content: '';
+            position: absolute;
+            top: -50%; left: -50%;
+            width: 200%; height: 200%;
+            background: radial-gradient(circle, rgba(255,255,255,0.1) 1px, transparent 1px);
+            background-size: 20px 20px;
+            opacity: 0.3;
+        }
+
+        .brand-logo {
+            font-size: 2.5rem;
+            font-weight: 800;
+            margin-bottom: 1rem;
+            background: linear-gradient(135deg, #fff, #cbd5e1);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+        }
+        .brand-tagline {
+            font-size: 1.25rem;
+            color: var(--text-secondary);
+            line-height: 1.6;
+            margin-bottom: 3rem;
+        }
+        .feature-list { list-style: none; }
+        .feature-list li {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            margin-bottom: 1.5rem;
+            font-size: 1.1rem;
+            color: var(--text-secondary);
+        }
+        .feature-list i {
+            width: 40px; height: 40px;
+            background: rgba(255,255,255,0.1);
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: var(--primary);
+        }
+
+        .auth-right {
+            padding: 4rem;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            background: rgba(15, 23, 42, 0.5);
+            overflow-y: auto;
+        }
+
+        .auth-header {
+            text-align: center;
+            margin-bottom: 2rem;
+        }
+        .auth-header h2 { font-size: 2rem; margin-bottom: 0.5rem; font-weight: 700; }
+        .auth-header p { color: var(--text-muted); }
+
+        .auth-tabs {
+            display: flex;
+            gap: 1rem;
+            margin-bottom: 2rem;
+            border-bottom: 2px solid rgba(255,255,255,0.1);
+            padding-bottom: 0.5rem;
+        }
+        .auth-tab {
+            flex: 1;
+            padding: 0.75rem;
+            background: transparent;
+            border: none;
+            color: var(--text-muted);
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+            border-radius: 8px;
+        }
+        .auth-tab.active {
+            color: var(--primary);
+            background: rgba(99, 102, 241, 0.1);
+        }
+
+        .auth-form { display: none; }
+        .auth-form.active { display: block; }
+
+        .form-group { margin-bottom: 1.5rem; }
+        .form-group label {
+            display: block;
+            margin-bottom: 0.5rem;
+            font-size: 0.875rem;
+            font-weight: 600;
+            color: var(--text-secondary);
+        }
+        .input-wrapper { position: relative; }
+        .input-wrapper input {
+            width: 100%;
+            padding: 1rem 1rem 1rem 3rem;
+            background: var(--glass-bg);
+            border: var(--glass-border);
+            border-radius: 12px;
+            color: var(--text-primary);
+            font-size: 1rem;
+            transition: all 0.3s;
+        }
+        .input-wrapper input:focus {
+            outline: none;
+            border-color: var(--primary);
+            box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.2);
+        }
+        .input-wrapper i {
+            position: absolute;
+            left: 1rem;
+            top: 50%;
+            transform: translateY(-50%);
+            color: var(--text-muted);
+        }
+
+        /* 验证码输入框样式 */
+        .verify-input-wrapper {
+            display: flex;
+            gap: 0.75rem;
+        }
+        .verify-input-wrapper input {
+            flex: 1;
+            padding: 1rem 1rem 1rem 1rem;
+        }
+        .btn-verify {
+            padding: 0 1.5rem;
+            background: linear-gradient(135deg, var(--primary), var(--accent));
+            border: none;
+            border-radius: 12px;
+            color: white;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+            white-space: nowrap;
+            min-width: 120px;
+        }
+        .btn-verify:hover:not(:disabled) {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 20px rgba(99, 102, 241, 0.4);
+        }
+        .btn-verify:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            background: var(--text-muted);
+        }
+        .btn-verify.countdown {
+            background: rgba(255,255,255,0.1);
+            color: var(--text-muted);
+        }
+
+        .btn-primary {
+            width: 100%;
+            padding: 1rem;
+            background: linear-gradient(135deg, var(--primary), var(--accent));
+            border: none;
+            border-radius: 12px;
+            color: white;
+            font-weight: 700;
+            font-size: 1rem;
+            cursor: pointer;
+            transition: all 0.3s;
+            margin-top: 1rem;
+            position: relative;
+            overflow: hidden;
+        }
+        .btn-primary::before {
+            content: '';
+            position: absolute;
+            top: 0; left: -100%;
+            width: 100%; height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(255,255,255,0.3), transparent);
+            transition: left 0.5s;
+        }
+        .btn-primary:hover::before { left: 100%; }
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 30px rgba(99, 102, 241, 0.4);
+        }
+        .btn-primary:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .switch-form {
+            text-align: center;
+            margin-top: 1.5rem;
+            color: var(--text-muted);
+            font-size: 0.9rem;
+        }
+        .switch-form a {
+            color: var(--primary);
+            font-weight: 600;
+            cursor: pointer;
+            text-decoration: none;
+        }
+
+        /* 安全验证弹窗 */
+        .captcha-modal {
+            display: none;
+            position: fixed;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.9);
+            backdrop-filter: blur(10px);
+            z-index: 20000;
+            align-items: center;
+            justify-content: center;
+        }
+        .captcha-modal.active { display: flex; }
+
+        .captcha-card {
+            background: var(--bg-card);
+            border: var(--glass-border);
+            border-radius: 24px;
+            padding: 2rem;
+            width: 90%;
+            max-width: 450px;
+            text-align: center;
+        }
+
+        /* 滑动拼图验证 */
+        .slider-captcha { display: none; }
+        .slider-captcha.active { display: block; }
+
+        .slider-container {
+            position: relative;
+            width: 100%;
+            height: 220px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            border-radius: 12px;
+            overflow: hidden;
+            margin: 1.5rem 0;
+            box-shadow: inset 0 0 20px rgba(0,0,0,0.3);
+        }
+
+        .slider-puzzle {
+            position: absolute;
+            width: 50px; 
+            height: 50px;
+            background: rgba(255,255,255,0.3);
+            backdrop-filter: blur(10px);
+            border-radius: 8px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.5), inset 0 0 10px rgba(255,255,255,0.3);
+            cursor: grab;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-size: 1.2rem;
+            left: 20px;
+            top: 50%;
+            transform: translateY(-50%);
+            transition: none;
+            user-select: none;
+            border: 2px solid rgba(255,255,255,0.8);
+            z-index: 10;
+        }
+        .slider-puzzle::before {
+            content: '';
+            position: absolute;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: linear-gradient(135deg, rgba(99,102,241,0.3), rgba(236,72,153,0.3));
+            border-radius: 6px;
+        }
+        .slider-puzzle:active { cursor: grabbing; }
+
+        .slider-target {
+            position: absolute;
+            width: 50px; 
+            height: 50px;
+            border: 3px dashed rgba(255,255,255,0.8);
+            border-radius: 8px;
+            right: 20px;
+            top: 50%;
+            transform: translateY(-50%);
+            background: rgba(16, 185, 129, 0.2);
+            box-shadow: 0 0 15px rgba(16, 185, 129, 0.4);
+            backdrop-filter: blur(2px);
+        }
+
+        .slider-track {
+            position: absolute;
+            bottom: 15px;
+            left: 20px;
+            right: 20px;
+            height: 44px;
+            background: rgba(0,0,0,0.6);
+            backdrop-filter: blur(10px);
+            border-radius: 22px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: var(--text-muted);
+            font-size: 0.875rem;
+            border: 1px solid rgba(255,255,255,0.1);
+        }
+
+        .slider-btn {
+            position: absolute;
+            left: 2px;
+            top: 2px;
+            width: 40px; 
+            height: 40px;
+            background: linear-gradient(135deg, var(--primary), var(--accent));
+            border-radius: 50%;
+            cursor: grab;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.3);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-size: 1rem;
+            transition: transform 0.1s;
+            z-index: 20;
+        }
+        .slider-btn:hover {
+            transform: scale(1.05);
+            box-shadow: 0 4px 15px rgba(99,102,241,0.5);
+        }
+        .slider-btn:active { cursor: grabbing; }
+
+        /* 色盲数字验证 */
+        .colorblind-captcha { display: none; }
+        .colorblind-captcha.active { display: block; }
+
+        .colorblind-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 1rem;
+            margin: 1.5rem 0;
+        }
+
+        .colorblind-option {
+            aspect-ratio: 1;
+            border-radius: 12px;
+            cursor: pointer;
+            transition: all 0.3s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.8rem;
+            font-weight: 800;
+            border: 3px solid transparent;
+            position: relative;
+            overflow: hidden;
+            background-size: cover;
+            background-position: center;
+            color: white;
+            text-shadow: 0 2px 4px rgba(0,0,0,0.8);
+            box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+        }
+        
+        /* 使用 CSS 渐变代替外部图片 */
+        .colorblind-option:nth-child(1) { background: linear-gradient(135deg, #dc2626, #991b1b); }
+        .colorblind-option:nth-child(2) { background: linear-gradient(135deg, #2563eb, #1e40af); }
+        .colorblind-option:nth-child(3) { background: linear-gradient(135deg, #16a34a, #166534); }
+        .colorblind-option:nth-child(4) { background: linear-gradient(135deg, #ca8a04, #854d0e); }
+        .colorblind-option:nth-child(5) { background: linear-gradient(135deg, #9333ea, #6b21a8); }
+        .colorblind-option:nth-child(6) { background: linear-gradient(135deg, #db2777, #9d174d); }
+        .colorblind-option:nth-child(7) { background: linear-gradient(135deg, #0ea5e9, #0369a1); }
+        .colorblind-option:nth-child(8) { background: linear-gradient(135deg, #f97316, #c2410c); }
+        .colorblind-option:nth-child(9) { background: linear-gradient(135deg, #4f46e5, #3730a3); }
+
+        .colorblind-option:hover {
+            transform: scale(1.08);
+            border-color: var(--primary);
+            box-shadow: 0 8px 25px rgba(99,102,241,0.4);
+            z-index: 10;
+        }
+        .colorblind-option.selected {
+            border-color: var(--success);
+            box-shadow: 0 0 0 4px rgba(16, 185, 129, 0.4), 0 8px 25px rgba(16,185,129,0.3);
+            transform: scale(1.05);
+        }
+        .colorblind-option.selected::after {
+            content: '\f00c';
+            font-family: 'Font Awesome 6 Free';
+            font-weight: 900;
+            position: absolute;
+            top: 5px;
+            right: 5px;
+            background: var(--success);
+            color: white;
+            width: 24px;
+            height: 24px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.8rem;
+        }
+        .colorblind-option.wrong {
+            border-color: var(--danger);
+            animation: shake 0.5s;
+        }
+
+        @keyframes shake {
+            0%, 100% { transform: translateX(0); }
+            25% { transform: translateX(-10px); }
+            75% { transform: translateX(10px); }
+        }
+
+        /* 通用提醒设置弹窗 - 适用于所有活动类型 */
+        .reminder-modal {
+            display: none;
+            position: fixed;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.9);
+            backdrop-filter: blur(10px);
+            z-index: 25000;
+            align-items: center;
+            justify-content: center;
+            padding: 2rem;
+        }
+        .reminder-modal.active { display: flex; }
+
+        .reminder-card {
+            background: linear-gradient(135deg, rgba(30, 41, 59, 0.95), rgba(15, 23, 42, 0.98));
+            border: 2px solid var(--primary);
+            border-radius: 32px;
+            width: 100%;
+            max-width: 550px;
+            max-height: 90vh;
+            overflow-y: auto;
+            animation: modalSlideIn 0.3s ease;
+            box-shadow: 0 25px 80px rgba(99, 102, 241, 0.3), 0 0 0 1px rgba(99, 102, 241, 0.2);
+        }
+
+        .reminder-header {
+            background: linear-gradient(135deg, rgba(99, 102, 241, 0.2), rgba(139, 92, 246, 0.2));
+            padding: 2rem;
+            text-align: center;
+            border-bottom: 1px solid rgba(99, 102, 241, 0.3);
+            position: relative;
+        }
+
+        .reminder-close {
+            position: absolute;
+            top: 1rem;
+            right: 1rem;
+            width: 40px;
+            height: 40px;
+            background: rgba(0,0,0,0.3);
+            border: 1px solid rgba(255,255,255,0.2);
+            border-radius: 50%;
+            color: var(--text-secondary);
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.3s;
+        }
+        .reminder-close:hover {
+            background: var(--danger);
+            color: white;
+            transform: rotate(90deg);
+        }
+
+        .reminder-title {
+            font-size: 1.5rem;
+            font-weight: 800;
+            margin-bottom: 0.5rem;
+            background: linear-gradient(135deg, var(--primary), var(--accent));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .reminder-subtitle {
+            color: var(--text-muted);
+            font-size: 0.9rem;
+        }
+
+        .reminder-content {
+            padding: 2rem;
+        }
+
+        .reminder-event-info {
+            background: rgba(99, 102, 241, 0.1);
+            border: 1px solid rgba(99, 102, 241, 0.2);
+            border-radius: 16px;
+            padding: 1.5rem;
+            margin-bottom: 2rem;
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+        }
+
+        .reminder-icon-large {
+            width: 60px;
+            height: 60px;
+            background: linear-gradient(135deg, var(--primary), var(--accent));
+            border-radius: 16px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.5rem;
+            color: white;
+        }
+
+        .reminder-event-details h3 {
+            font-size: 1.25rem;
+            margin-bottom: 0.25rem;
+        }
+
+        .reminder-event-details p {
+            color: var(--text-muted);
+            font-size: 0.875rem;
+        }
+
+        /* 提醒时间选择 */
+        .reminder-time-section {
+            margin-bottom: 2rem;
+        }
+
+        .reminder-time-label {
+            font-size: 0.875rem;
+            font-weight: 600;
+            color: var(--text-secondary);
+            margin-bottom: 1rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .reminder-time-options {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 0.75rem;
+        }
+
+        .reminder-time-btn {
+            padding: 1rem;
+            background: var(--glass-bg);
+            border: 2px solid transparent;
+            border-radius: 12px;
+            color: var(--text-secondary);
+            cursor: pointer;
+            transition: all 0.3s;
+            text-align: center;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .reminder-time-btn:hover {
+            border-color: rgba(99, 102, 241, 0.3);
+            transform: translateY(-2px);
+        }
+
+        .reminder-time-btn.selected {
+            border-color: var(--primary);
+            background: rgba(99, 102, 241, 0.1);
+            color: var(--primary);
+        }
+
+        .reminder-time-btn i {
+            font-size: 1.25rem;
+        }
+
+        .reminder-time-btn span {
+            font-size: 0.875rem;
+            font-weight: 600;
+        }
+
+        .reminder-time-btn small {
+            font-size: 0.75rem;
+            opacity: 0.8;
+        }
+
+        /* 自定义日期 */
+        .reminder-custom-date {
+            margin-bottom: 2rem;
+        }
+
+        .reminder-date-input {
+            width: 100%;
+            padding: 1rem;
+            background: var(--glass-bg);
+            border: 2px solid rgba(255,255,255,0.1);
+            border-radius: 12px;
+            color: var(--text-primary);
+            font-size: 1rem;
+            font-family: inherit;
+            transition: all 0.3s;
+        }
+
+        .reminder-date-input:focus {
+            outline: none;
+            border-color: var(--primary);
+            box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.2);
+        }
+
+        /* 提醒方式 */
+        .reminder-method-section {
+            margin-bottom: 2rem;
+        }
+
+        .reminder-method-options {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.75rem;
+        }
+
+        .reminder-method-chip {
+            padding: 0.75rem 1.25rem;
+            background: var(--glass-bg);
+            border: 1px solid rgba(255,255,255,0.1);
+            border-radius: 999px;
+            color: var(--text-secondary);
+            cursor: pointer;
+            transition: all 0.3s;
+            font-size: 0.875rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .reminder-method-chip:hover {
+            border-color: var(--primary);
+            color: var(--primary);
+        }
+
+        .reminder-method-chip.selected {
+            background: rgba(99, 102, 241, 0.2);
+            border-color: var(--primary);
+            color: var(--primary);
+        }
+
+        .reminder-method-chip.selected::before {
+            content: '\f00c';
+            font-family: 'Font Awesome 6 Free';
+            font-weight: 900;
+            font-size: 0.75rem;
+        }
+
+        /* 保存按钮 */
+        .reminder-save-btn {
+            width: 100%;
+            padding: 1.25rem;
+            background: linear-gradient(135deg, var(--primary), var(--accent));
+            border: none;
+            border-radius: 16px;
+            color: white;
+            font-weight: 800;
+            font-size: 1.1rem;
+            cursor: pointer;
+            transition: all 0.3s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.5rem;
+        }
+
+        .reminder-save-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 30px rgba(99, 102, 241, 0.4);
+        }
+
+        .reminder-save-btn:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        /* VIP 记录弹窗 */
+        .vip-record-modal {
+            display: none;
+            position: fixed;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.9);
+            backdrop-filter: blur(10px);
+            z-index: 25000;
+            align-items: center;
+            justify-content: center;
+            padding: 2rem;
+        }
+        .vip-record-modal.active { display: flex; }
+
+        .vip-record-card {
+            background: linear-gradient(135deg, rgba(30, 41, 59, 0.95), rgba(15, 23, 42, 0.98));
+            border: 2px solid var(--vip-gold);
+            border-radius: 32px;
+            width: 100%;
+            max-width: 550px;
+            max-height: 90vh;
+            overflow-y: auto;
+            animation: modalSlideIn 0.3s ease;
+            box-shadow: 0 25px 80px rgba(251, 191, 36, 0.3), 0 0 0 1px rgba(251, 191, 36, 0.2);
+        }
+
+        .vip-record-header {
+            background: linear-gradient(135deg, rgba(251, 191, 36, 0.2), rgba(168, 85, 247, 0.2));
+            padding: 2rem;
+            text-align: center;
+            border-bottom: 1px solid rgba(251, 191, 36, 0.3);
+            position: relative;
+        }
+
+        .vip-record-close {
+            position: absolute;
+            top: 1rem;
+            right: 1rem;
+            width: 40px;
+            height: 40px;
+            background: rgba(0,0,0,0.3);
+            border: 1px solid rgba(255,255,255,0.2);
+            border-radius: 50%;
+            color: var(--text-secondary);
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.3s;
+        }
+        .vip-record-close:hover {
+            background: var(--danger);
+            color: white;
+            transform: rotate(90deg);
+        }
+
+        .vip-record-title {
+            font-size: 1.5rem;
+            font-weight: 800;
+            margin-bottom: 0.5rem;
+            background: linear-gradient(135deg, var(--vip-gold), #f59e0b);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .vip-record-subtitle {
+            color: var(--text-muted);
+            font-size: 0.9rem;
+        }
+
+        .vip-record-content {
+            padding: 2rem;
+        }
+
+        .vip-service-display {
+            background: rgba(251, 191, 36, 0.1);
+            border: 1px solid rgba(251, 191, 36, 0.2);
+            border-radius: 16px;
+            padding: 1.5rem;
+            margin-bottom: 2rem;
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+        }
+
+        .vip-service-icon-large {
+            width: 60px;
+            height: 60px;
+            background: linear-gradient(135deg, var(--vip-gold), #f59e0b);
+            border-radius: 16px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.5rem;
+            color: white;
+        }
+
+        .vip-service-info h3 {
+            font-size: 1.25rem;
+            margin-bottom: 0.25rem;
+        }
+
+        .vip-service-info p {
+            color: var(--text-muted);
+            font-size: 0.875rem;
+        }
+
+        /* 档位选择 */
+        .vip-tier-section {
+            margin-bottom: 2rem;
+        }
+
+        .vip-tier-label {
+            font-size: 0.875rem;
+            font-weight: 600;
+            color: var(--text-secondary);
+            margin-bottom: 1rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .vip-tier-options {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 0.75rem;
+        }
+
+        .vip-tier-btn {
+            padding: 1rem 0.5rem;
+            background: var(--glass-bg);
+            border: 2px solid transparent;
+            border-radius: 12px;
+            color: var(--text-secondary);
+            cursor: pointer;
+            transition: all 0.3s;
+            text-align: center;
+        }
+
+        .vip-tier-btn:hover {
+            border-color: rgba(251, 191, 36, 0.3);
+            transform: translateY(-2px);
+        }
+
+        .vip-tier-btn.selected {
+            border-color: var(--vip-gold);
+            background: rgba(251, 191, 36, 0.1);
+            color: var(--vip-gold);
+        }
+
+        .vip-tier-btn i {
+            display: block;
+            font-size: 1.5rem;
+            margin-bottom: 0.5rem;
+        }
+
+        .vip-tier-btn span {
+            display: block;
+            font-size: 0.75rem;
+            font-weight: 600;
+        }
+
+        /* 到期时间输入 */
+        .vip-date-section {
+            margin-bottom: 2rem;
+        }
+
+        .vip-date-input-wrapper {
+            position: relative;
+        }
+
+        .vip-date-input {
+            width: 100%;
+            padding: 1rem 1rem 1rem 3rem;
+            background: var(--glass-bg);
+            border: 2px solid rgba(255,255,255,0.1);
+            border-radius: 12px;
+            color: var(--text-primary);
+            font-size: 1rem;
+            font-family: inherit;
+            transition: all 0.3s;
+            cursor: pointer;
+        }
+
+        .vip-date-input:focus {
+            outline: none;
+            border-color: var(--vip-gold);
+            box-shadow: 0 0 0 3px rgba(251, 191, 36, 0.2);
+        }
+
+        .vip-date-input-wrapper i {
+            position: absolute;
+            left: 1rem;
+            top: 50%;
+            transform: translateY(-50%);
+            color: var(--vip-gold);
+            font-size: 1.25rem;
+        }
+
+        /* 计算结果显示 */
+        .vip-calculation {
+            background: rgba(255,255,255,0.05);
+            border-radius: 16px;
+            padding: 1.5rem;
+            margin-bottom: 2rem;
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 1rem;
+            text-align: center;
+        }
+
+        .vip-calc-item {
+            padding: 1rem;
+            background: rgba(0,0,0,0.2);
+            border-radius: 12px;
+        }
+
+        .vip-calc-value {
+            font-size: 1.5rem;
+            font-weight: 800;
+            color: var(--vip-gold);
+            margin-bottom: 0.25rem;
+        }
+
+        .vip-calc-label {
+            font-size: 0.75rem;
+            color: var(--text-muted);
+        }
+
+        .vip-calc-item.urgent .vip-calc-value {
+            color: var(--danger);
+        }
+
+        .vip-calc-item.warning .vip-calc-value {
+            color: var(--warning);
+        }
+
+        /* 提醒设置 */
+        .vip-reminder-section {
+            margin-bottom: 2rem;
+        }
+
+        .vip-reminder-options {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.75rem;
+        }
+
+        .vip-reminder-chip {
+            padding: 0.5rem 1rem;
+            background: var(--glass-bg);
+            border: 1px solid rgba(255,255,255,0.1);
+            border-radius: 999px;
+            color: var(--text-secondary);
+            cursor: pointer;
+            transition: all 0.3s;
+            font-size: 0.875rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .vip-reminder-chip:hover {
+            border-color: var(--vip-gold);
+            color: var(--vip-gold);
+        }
+
+        .vip-reminder-chip.selected {
+            background: rgba(251, 191, 36, 0.2);
+            border-color: var(--vip-gold);
+            color: var(--vip-gold);
+        }
+
+        .vip-reminder-chip.selected::before {
+            content: '\f00c';
+            font-family: 'Font Awesome 6 Free';
+            font-weight: 900;
+            font-size: 0.75rem;
+        }
+
+        /* 保存按钮 */
+        .vip-save-btn {
+            width: 100%;
+            padding: 1.25rem;
+            background: linear-gradient(135deg, var(--vip-gold), #f59e0b);
+            border: none;
+            border-radius: 16px;
+            color: #0f172a;
+            font-weight: 800;
+            font-size: 1.1rem;
+            cursor: pointer;
+            transition: all 0.3s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.5rem;
+        }
+
+        .vip-save-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 30px rgba(251, 191, 36, 0.4);
+        }
+
+        .vip-save-btn:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        /* 已保存的 VIP 记录标签 */
+        .vip-status-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.25rem 0.75rem;
+            border-radius: 999px;
+            font-size: 0.75rem;
+            font-weight: 600;
+            margin-top: 0.5rem;
+        }
+
+        .vip-status-badge.active {
+            background: rgba(16, 185, 129, 0.2);
+            color: var(--success);
+        }
+
+        .vip-status-badge.expiring {
+            background: rgba(245, 158, 11, 0.2);
+            color: var(--warning);
+        }
+
+        .vip-status-badge.expired {
+            background: rgba(239, 68, 68, 0.2);
+            color: var(--danger);
+        }
+
+        /* 导航栏 */
+        .navbar {
+            position: fixed;
+            top: 0; left: 0; right: 0;
+            z-index: 1000;
+            background: rgba(15, 23, 42, 0.8);
+            backdrop-filter: blur(20px);
+            border-bottom: var(--glass-border);
+        }
+        .nav-content {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 1rem 2rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .nav-logo {
+            font-size: 1.5rem;
+            font-weight: 800;
+            background: linear-gradient(135deg, var(--primary), var(--secondary));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            cursor: pointer;
+        }
+        .nav-actions {
+            display: flex;
+            gap: 1rem;
+            align-items: center;
+        }
+        .nav-btn {
+            padding: 0.6rem 1.2rem;
+            background: rgba(255,255,255,0.05);
+            border: 1px solid rgba(255,255,255,0.1);
+            border-radius: 999px;
+            color: var(--text-secondary);
+            cursor: pointer;
+            transition: all 0.3s;
+            font-size: 0.9rem;
+            font-weight: 500;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+        .nav-btn:hover, .nav-btn.active {
+            background: var(--primary);
+            color: white;
+            border-color: var(--primary);
+        }
+        .user-avatar {
+            width: 40px; height: 40px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, var(--primary), var(--accent));
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 700;
+            cursor: pointer;
+            border: 2px solid rgba(255,255,255,0.2);
+        }
+        .hidden { display: none !important; }
+
+        /* 主要内容 */
+        .main-content {
+            margin-top: 80px;
+            padding: 2rem;
+            max-width: 1400px;
+            margin-left: auto;
+            margin-right: auto;
+        }
+
+        /* 搜索界面 */
+        .search-page {
+            display: none;
+            min-height: calc(100vh - 80px);
+        }
+        .search-page.active { display: block; }
+
+        .search-header {
+            text-align: center;
+            padding: 3rem 0;
+        }
+        .search-title {
+            font-size: 2.5rem;
+            font-weight: 800;
+            margin-bottom: 1rem;
+            background: linear-gradient(135deg, #fff, var(--primary));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        /* 搜索框容器 */
+        .search-container {
+            max-width: 800px;
+            margin: 0 auto 3rem;
+            position: relative;
+        }
+
+        .search-box-large {
+            position: relative;
+            margin-bottom: 1.5rem;
+        }
+        .search-box-large input {
+            width: 100%;
+            padding: 1.25rem 1.25rem 1.25rem 3.5rem;
+            background: var(--glass-bg);
+            border: var(--glass-border);
+            border-radius: 999px;
+            color: var(--text-primary);
+            font-size: 1.1rem;
+            transition: all 0.3s;
+        }
+        .search-box-large input:focus {
+            outline: none;
+            border-color: var(--primary);
+            box-shadow: 0 0 0 4px rgba(99, 102, 241, 0.2);
+        }
+        .search-box-large i {
+            position: absolute;
+            left: 1.25rem;
+            top: 50%;
+            transform: translateY(-50%);
+            color: var(--text-muted);
+            font-size: 1.25rem;
+        }
+
+        /* 定位按钮 */
+        .location-btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.75rem 1.5rem;
+            background: rgba(16, 185, 129, 0.2);
+            border: 1px solid rgba(16, 185, 129, 0.3);
+            border-radius: 999px;
+            color: var(--success);
+            cursor: pointer;
+            transition: all 0.3s;
+            font-size: 0.9rem;
+            font-weight: 500;
+        }
+        .location-btn:hover {
+            background: rgba(16, 185, 129, 0.3);
+            transform: translateY(-2px);
+        }
+        .location-btn.loading {
+            animation: pulse 1.5s infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.6; }
+        }
+
+        /* 定位结果 */
+        .location-result {
+            margin-top: 1rem;
+            padding: 1rem;
+            background: rgba(16, 185, 129, 0.1);
+            border: 1px solid rgba(16, 185, 129, 0.2);
+            border-radius: 12px;
+            display: none;
+            align-items: center;
+            gap: 0.75rem;
+            color: var(--success);
+        }
+        .location-result.active { display: flex; }
+
+        /* 热门搜索 */
+        .hot-searches {
+            margin-bottom: 3rem;
+        }
+        .hot-searches h3 {
+            font-size: 1.1rem;
+            margin-bottom: 1rem;
+            color: var(--text-secondary);
+        }
+        .hot-tags {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.75rem;
+        }
+        .hot-tag {
+            padding: 0.6rem 1.2rem;
+            background: rgba(255,255,255,0.05);
+            border: 1px solid rgba(255,255,255,0.1);
+            border-radius: 999px;
+            color: var(--text-secondary);
+            cursor: pointer;
+            transition: all 0.3s;
+            font-size: 0.9rem;
+        }
+        .hot-tag:hover {
+            background: var(--primary);
+            color: white;
+            border-color: var(--primary);
+            transform: translateY(-2px);
+        }
+
+        /* 搜索结果 */
+        .search-results {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
+            gap: 1.5rem;
+        }
+
+        .result-card {
+            background: var(--glass-bg);
+            border: var(--glass-border);
+            border-radius: 20px;
+            padding: 1.5rem;
+            transition: all 0.3s;
+            cursor: pointer;
+        }
+        .result-card:hover {
+            transform: translateY(-4px);
+            box-shadow: 0 15px 40px rgba(0,0,0,0.3);
+            border-color: rgba(255,255,255,0.2);
+        }
+
+        .result-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            margin-bottom: 1rem;
+        }
+        .result-category {
+            padding: 0.25rem 0.75rem;
+            border-radius: 999px;
+            font-size: 0.75rem;
+            font-weight: 600;
+            text-transform: uppercase;
+        }
+        .result-category.concert { background: rgba(236, 72, 153, 0.2); color: #ec4899; }
+        .result-category.marathon { background: rgba(16, 185, 129, 0.2); color: #10b981; }
+        .result-category.exam { background: rgba(59, 130, 246, 0.2); color: #3b82f6; }
+        .result-category.vip { background: rgba(245, 158, 11, 0.2); color: #f59e0b; }
+
+        .result-distance {
+            display: flex;
+            align-items: center;
+            gap: 0.25rem;
+            color: var(--text-muted);
+            font-size: 0.875rem;
+        }
+
+        .result-title {
+            font-size: 1.1rem;
+            font-weight: 700;
+            margin-bottom: 0.5rem;
+            line-height: 1.4;
+        }
+        .result-location {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            color: var(--text-muted);
+            font-size: 0.875rem;
+            margin-bottom: 0.75rem;
+        }
+        .result-date {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            color: var(--text-secondary);
+            font-size: 0.9rem;
+            margin-bottom: 1rem;
+        }
+
+        /* 地图容器 */
+        .map-container {
+            width: 100%;
+            height: 400px;
+            background: var(--glass-bg);
+            border: var(--glass-border);
+            border-radius: 20px;
+            margin-bottom: 2rem;
+            display: none;
+            align-items: center;
+            justify-content: center;
+            color: var(--text-muted);
+        }
+        .map-container.active { display: flex; }
+
+        /* 分类模块 */
+        .category-section { margin-bottom: 4rem; }
+        .section-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 2rem;
+        }
+        .section-title {
+            font-size: 2rem;
+            font-weight: 700;
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+        }
+        .view-all-btn {
+            padding: 0.6rem 1.2rem;
+            background: rgba(255,255,255,0.05);
+            border: 1px solid rgba(255,255,255,0.1);
+            border-radius: 999px;
+            color: var(--text-secondary);
+            cursor: pointer;
+            transition: all 0.3s;
+            font-size: 0.9rem;
+        }
+        .view-all-btn:hover {
+            background: var(--primary);
+            color: white;
+            border-color: var(--primary);
+        }
+
+        .category-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+            gap: 1.5rem;
+        }
+
+        .category-card {
+            background: var(--glass-bg);
+            border: var(--glass-border);
+            border-radius: 24px;
+            overflow: hidden;
+            transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+            cursor: pointer;
+            position: relative;
+        }
+        .category-card:hover {
+            transform: translateY(-8px);
+            box-shadow: 0 20px 60px rgba(0,0,0,0.4);
+            border-color: rgba(255,255,255,0.3);
+        }
+
+        .category-image {
+            width: 100%;
+            height: 160px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 3rem;
+            color: white;
+            position: relative;
+        }
+        .category-image.concert { background: linear-gradient(135deg, #ec4899, #8b5cf6); }
+        .category-image.marathon { background: linear-gradient(135deg, #10b981, #06b6d4); }
+        .category-image.exam { background: linear-gradient(135deg, #3b82f6, #06b6d4); }
+        .category-image.vip { background: linear-gradient(135deg, #f59e0b, #f97316); }
+
+        .category-content { padding: 1.5rem; }
+        .category-name {
+            font-size: 1.25rem;
+            font-weight: 700;
+            margin-bottom: 0.5rem;
+        }
+        .category-count {
+            color: var(--text-muted);
+            font-size: 0.875rem;
+            margin-bottom: 1rem;
+        }
+        .category-tags {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.5rem;
+        }
+        .category-tag {
+            padding: 0.25rem 0.75rem;
+            background: rgba(99, 102, 241, 0.2);
+            color: var(--primary);
+            border-radius: 999px;
+            font-size: 0.75rem;
+            font-weight: 600;
+        }
+
+        /* 事件列表页 */
+        .events-page { display: none; }
+        .events-page.active { display: block; }
+
+        .back-btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.6rem 1.2rem;
+            background: rgba(255,255,255,0.05);
+            border: 1px solid rgba(255,255,255,0.1);
+            border-radius: 999px;
+            color: var(--text-secondary);
+            cursor: pointer;
+            transition: all 0.3s;
+            margin-bottom: 2rem;
+        }
+        .back-btn:hover {
+            background: var(--primary);
+            color: white;
+            border-color: var(--primary);
+        }
+
+        /* 筛选栏 */
+        .filter-bar {
+            background: var(--glass-bg);
+            border: var(--glass-border);
+            border-radius: 24px;
+            padding: 1.5rem;
+            margin-bottom: 3rem;
+            display: flex;
+            gap: 1rem;
+            flex-wrap: wrap;
+            align-items: center;
+            backdrop-filter: blur(10px);
+            position: relative;
+            z-index: 100;
+        }
+        .filter-group {
+            display: flex;
+            gap: 0.5rem;
+            flex-wrap: wrap;
+        }
+        .filter-btn {
+            padding: 0.6rem 1.2rem;
+            background: rgba(255,255,255,0.05);
+            border: 1px solid rgba(255,255,255,0.1);
+            border-radius: 999px;
+            color: var(--text-secondary);
+            cursor: pointer;
+            transition: all 0.3s;
+            font-size: 0.9rem;
+            font-weight: 500;
+        }
+        .filter-btn:hover, .filter-btn.active {
+            background: var(--primary);
+            color: white;
+            border-color: var(--primary);
+            transform: translateY(-1px);
+        }
+
+        /* 地区选择下拉 */
+        .city-dropdown { 
+            position: relative; 
+            display: inline-block;
+            z-index: 1000;
+        }
+        
+        .city-dropdown-toggle {
+            padding: 0.6rem 1.2rem;
+            background: rgba(255,255,255,0.05);
+            border: 1px solid rgba(255,255,255,0.1);
+            border-radius: 999px;
+            color: var(--text-secondary);
+            cursor: pointer;
+            transition: all 0.3s;
+            font-size: 0.9rem;
+            font-weight: 500;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            white-space: nowrap;
+        }
+        .city-dropdown-toggle:hover {
+            background: rgba(255,255,255,0.1);
+            color: var(--text-primary);
+        }
+        .city-dropdown-toggle.active {
+            background: var(--primary);
+            color: white;
+            border-color: var(--primary);
+        }
+        
+        .city-dropdown-content {
+            display: none;
+            position: absolute;
+            top: calc(100% + 10px);
+            left: 0;
+            background: var(--bg-card);
+            border: var(--glass-border);
+            border-radius: 16px;
+            padding: 1.5rem;
+            width: 600px;
+            max-height: 500px;
+            overflow-y: auto;
+            z-index: 9999;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.5);
+            margin-top: 0.5rem;
+            backdrop-filter: blur(20px);
+        }
+        .city-dropdown-content.active {
+            display: block;
+            animation: dropdownFadeIn 0.2s ease;
+        }
+        
+        @keyframes dropdownFadeIn {
+            from { opacity: 0; transform: translateY(-10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        
+        .city-dropdown-toggle .fa-chevron-down {
+            transition: transform 0.3s;
+        }
+        .city-dropdown-toggle.active .fa-chevron-down {
+            transform: rotate(180deg);
+        }
+        
+        .city-section {
+            margin-bottom: 1.5rem;
+        }
+        .city-section:last-child {
+            margin-bottom: 0;
+        }
+        .city-section-title {
+            font-size: 0.875rem;
+            font-weight: 700;
+            color: var(--primary);
+            margin-bottom: 0.75rem;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+        .city-grid {
+            display: grid;
+            grid-template-columns: repeat(6, 1fr);
+            gap: 0.5rem;
+        }
+        .city-btn {
+            padding: 0.5rem;
+            background: rgba(255,255,255,0.05);
+            border: 1px solid rgba(255,255,255,0.1);
+            border-radius: 8px;
+            color: var(--text-secondary);
+            cursor: pointer;
+            transition: all 0.3s;
+            font-size: 0.8rem;
+            text-align: center;
+            white-space: nowrap;
+        }
+        .city-btn:hover {
+            background: var(--primary);
+            color: white;
+            border-color: var(--primary);
+            transform: translateY(-2px);
+        }
+        .city-btn.active {
+            background: var(--primary);
+            color: white;
+            border-color: var(--primary);
+        }
+
+        /* 事件卡片 */
+        .events-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(380px, 1fr));
+            gap: 2rem;
+            position: relative;
+            z-index: 1;
+        }
+
+        .event-card {
+            background: var(--glass-bg);
+            border: var(--glass-border);
+            border-radius: 24px;
+            overflow: hidden;
+            transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+            position: relative;
+            backdrop-filter: blur(10px);
+            cursor: pointer;
+        }
+        .event-card:hover {
+            transform: translateY(-8px);
+            box-shadow: 0 20px 60px rgba(0,0,0,0.4);
+            border-color: rgba(255,255,255,0.3);
+        }
+
+        .event-image {
+            width: 100%;
+            height: 200px;
+            object-fit: cover;
+            background: linear-gradient(135deg, var(--primary), var(--secondary));
+            position: relative;
+            overflow: hidden;
+            pointer-events: none;
+        }
+        .event-image::after {
+            content: '';
+            position: absolute;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: linear-gradient(to bottom, transparent 50%, rgba(15,23,42,0.8));
+        }
+
+        .event-badge {
+            position: absolute;
+            top: 1rem;
+            right: 1rem;
+            padding: 0.5rem 1rem;
+            background: rgba(0,0,0,0.6);
+            backdrop-filter: blur(10px);
+            border-radius: 999px;
+            font-size: 0.875rem;
+            font-weight: 600;
+            border: 1px solid rgba(255,255,255,0.1);
+            z-index: 10;
+        }
+        .event-badge.urgent { background: rgba(239, 68, 68, 0.9); color: white; }
+        .event-badge.warning { background: rgba(245, 158, 11, 0.9); color: white; }
+        .event-badge.info { background: rgba(59, 130, 246, 0.9); color: white; }
+
+        .event-content { 
+            padding: 1.5rem; 
+            pointer-events: none;
+        }
+        .event-meta {
+            display: flex;
+            gap: 1rem;
+            margin-bottom: 0.75rem;
+            font-size: 0.875rem;
+            color: var(--text-muted);
+            flex-wrap: wrap;
+        }
+        .event-meta span {
+            display: flex;
+            align-items: center;
+            gap: 0.4rem;
+        }
+        .event-title {
+            font-size: 1.25rem;
+            font-weight: 700;
+            margin-bottom: 0.5rem;
+            line-height: 1.4;
+        }
+        .event-desc {
+            color: var(--text-secondary);
+            font-size: 0.95rem;
+            line-height: 1.6;
+            margin-bottom: 1.5rem;
+            display: -webkit-box;
+            -webkit-line-clamp: 2;
+            -webkit-box-orient: vertical;
+            overflow: hidden;
+        }
+        .event-footer {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding-top: 1rem;
+            border-top: 1px solid rgba(255,255,255,0.1);
+            pointer-events: auto;
+        }
+        .countdown {
+            font-size: 0.875rem;
+            color: var(--text-muted);
+        }
+        .countdown.urgent { color: var(--danger); font-weight: 600; }
+        .countdown.warning { color: var(--warning); font-weight: 600; }
+
+        .btn-remind {
+            padding: 0.6rem 1.2rem;
+            background: linear-gradient(135deg, var(--primary), var(--accent));
+            border: none;
+            border-radius: 999px;
+            color: white;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            font-size: 0.9rem;
+            pointer-events: auto;
+        }
+        .btn-remind:hover {
+            transform: scale(1.05);
+            box-shadow: 0 5px 20px rgba(99, 102, 241, 0.4);
+        }
+        .btn-remind.active { background: var(--success); }
+
+        /* VIP 记录按钮 */
+        .btn-vip-record {
+            padding: 0.6rem 1.2rem;
+            background: linear-gradient(135deg, var(--vip-gold), #f59e0b);
+            border: none;
+            border-radius: 999px;
+            color: #0f172a;
+            font-weight: 700;
+            cursor: pointer;
+            transition: all 0.3s;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            font-size: 0.9rem;
+            pointer-events: auto;
+        }
+        .btn-vip-record:hover {
+            transform: scale(1.05);
+            box-shadow: 0 5px 20px rgba(251, 191, 36, 0.4);
+        }
+
+        /* 我的提醒页面 */
+        .my-reminders-page { display: none; }
+        .my-reminders-page.active { display: block; }
+
+        .reminders-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 2rem;
+            padding-bottom: 1rem;
+            border-bottom: 1px solid rgba(255,255,255,0.1);
+        }
+        .reminders-header h2 {
+            font-size: 2rem;
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+        }
+        .reminders-count {
+            background: var(--primary);
+            color: white;
+            padding: 0.25rem 0.75rem;
+            border-radius: 999px;
+            font-size: 0.875rem;
+        }
+
+        .empty-state {
+            text-align: center;
+            padding: 6rem 2rem;
+            color: var(--text-muted);
+        }
+        .empty-state i {
+            font-size: 4rem;
+            margin-bottom: 1.5rem;
+            opacity: 0.5;
+        }
+        .empty-state h3 {
+            font-size: 1.5rem;
+            margin-bottom: 0.5rem;
+            color: var(--text-primary);
+        }
+
+        /* 活动详情弹窗 */
+        .event-detail-modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.85);
+            backdrop-filter: blur(10px);
+            z-index: 15000;
+            align-items: center;
+            justify-content: center;
+            padding: 2rem;
+            overflow-y: auto;
+        }
+        .event-detail-modal.active {
+            display: flex;
+        }
+
+        .event-detail-card {
+            background: var(--bg-card);
+            border: var(--glass-border);
+            border-radius: 32px;
+            width: 100%;
+            max-width: 800px;
+            max-height: 90vh;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            animation: modalSlideIn 0.3s ease;
+            box-shadow: 0 25px 80px rgba(0,0,0,0.5);
+        }
+
+        @keyframes modalSlideIn {
+            from {
+                opacity: 0;
+                transform: translateY(30px) scale(0.95);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0) scale(1);
+            }
+        }
+
+        .event-detail-header {
+            position: relative;
+            height: 300px;
+            background-size: cover;
+            background-position: center;
+            flex-shrink: 0;
+        }
+        .event-detail-header::after {
+            content: '';
+            position: absolute;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: linear-gradient(to bottom, transparent 30%, rgba(15,23,42,0.95));
+        }
+
+        .event-detail-close {
+            position: absolute;
+            top: 1.5rem;
+            right: 1.5rem;
+            width: 44px;
+            height: 44px;
+            background: rgba(0,0,0,0.5);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255,255,255,0.2);
+            border-radius: 50%;
+            color: white;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.2rem;
+            transition: all 0.3s;
+            z-index: 10;
+        }
+        .event-detail-close:hover {
+            background: rgba(239, 68, 68, 0.8);
+            transform: rotate(90deg);
+        }
+
+        .event-detail-content {
+            padding: 2rem;
+            overflow-y: auto;
+            flex: 1;
+        }
+
+        .event-detail-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.5rem 1rem;
+            background: rgba(99, 102, 241, 0.2);
+            border: 1px solid rgba(99, 102, 241, 0.3);
+            border-radius: 999px;
+            color: var(--primary);
+            font-size: 0.875rem;
+            font-weight: 600;
+            margin-bottom: 1rem;
+        }
+
+        .event-detail-title {
+            font-size: 2rem;
+            font-weight: 800;
+            margin-bottom: 1.5rem;
+            line-height: 1.3;
+        }
+
+        .event-detail-info {
+            display: grid;
+            gap: 1rem;
+            margin-bottom: 2rem;
+        }
+
+        .event-detail-info-item {
+            display: flex;
+            align-items: flex-start;
+            gap: 1rem;
+            padding: 1rem;
+            background: rgba(255,255,255,0.05);
+            border-radius: 12px;
+            border: 1px solid rgba(255,255,255,0.1);
+        }
+
+        .event-detail-info-item i {
+            width: 40px;
+            height: 40px;
+            background: rgba(99, 102, 241, 0.2);
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: var(--primary);
+            font-size: 1.1rem;
+            flex-shrink: 0;
+        }
+
+        .event-detail-info-content {
+            flex: 1;
+        }
+
+        .event-detail-info-label {
+            font-size: 0.875rem;
+            color: var(--text-muted);
+            margin-bottom: 0.25rem;
+        }
+
+        .event-detail-info-value {
+            font-size: 1.1rem;
+            font-weight: 600;
+            color: var(--text-primary);
+        }
+
+        .event-detail-description {
+            margin-bottom: 2rem;
+        }
+
+        .event-detail-description h3 {
+            font-size: 1.25rem;
+            margin-bottom: 1rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .event-detail-description p {
+            color: var(--text-secondary);
+            line-height: 1.8;
+            font-size: 1rem;
+        }
+
+        .event-detail-actions {
+            display: flex;
+            gap: 1rem;
+            padding-top: 1.5rem;
+            border-top: 1px solid rgba(255,255,255,0.1);
+        }
+
+        .event-detail-btn {
+            flex: 1;
+            padding: 1rem 2rem;
+            border-radius: 12px;
+            font-weight: 700;
+            font-size: 1rem;
+            cursor: pointer;
+            transition: all 0.3s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.5rem;
+        }
+
+        .event-detail-btn-primary {
+            background: linear-gradient(135deg, var(--primary), var(--accent));
+            border: none;
+            color: white;
+        }
+        .event-detail-btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 30px rgba(99, 102, 241, 0.4);
+        }
+
+        .event-detail-btn-secondary {
+            background: rgba(255,255,255,0.05);
+            border: 1px solid rgba(255,255,255,0.2);
+            color: var(--text-secondary);
+        }
+        .event-detail-btn-secondary:hover {
+            background: rgba(255,255,255,0.1);
+            color: var(--text-primary);
+        }
+
+        /* 响应式 */
+        @media (max-width: 968px) {
+            .auth-container { grid-template-columns: 1fr; height: auto; max-height: 90vh; }
+            .auth-left { display: none; }
+            .skip-top-btn { top: 1rem; right: 1rem; padding: 0.5rem 1rem; font-size: 0.8rem; }
+            .hero-title { font-size: 2.5rem; }
+            .events-grid { grid-template-columns: 1fr; }
+            .category-grid { grid-template-columns: 1fr; }
+            .search-results { grid-template-columns: 1fr; }
+            
+            .city-dropdown-content {
+                width: 90vw;
+                left: 50%;
+                transform: translateX(-50%);
+                padding: 1rem;
+            }
+            .city-grid {
+                grid-template-columns: repeat(4, 1fr);
+            }
+            .filter-bar {
+                flex-direction: column;
+                align-items: stretch;
+            }
+            
+            .event-detail-card {
+                max-height: 95vh;
+            }
+            .event-detail-header {
+                height: 200px;
+            }
+            .event-detail-title {
+                font-size: 1.5rem;
+            }
+
+            .vip-record-card, .reminder-card {
+                max-width: 100%;
+            }
+            .vip-tier-options, .reminder-time-options {
+                grid-template-columns: repeat(2, 1fr);
+            }
+            .vip-calculation {
+                grid-template-columns: 1fr;
+            }
+        }
+        
+        @media (max-width: 640px) {
+            .city-grid {
+                grid-template-columns: repeat(3, 1fr);
+            }
+            .city-dropdown-content {
+                max-height: 400px;
+            }
+            .event-detail-actions {
+                flex-direction: column;
+            }
+            .vip-tier-options, .reminder-time-options {
+                grid-template-columns: repeat(2, 1fr);
+            }
+            .verify-input-wrapper {
+                flex-direction: column;
+            }
+            .btn-verify {
+                width: 100%;
+                padding: 0.75rem;
+            }
+        }
+    </style>
+</head>
+<body>
+    <!-- 加载动画 -->
+    <div class="loader" id="loader">
+        <div class="loader-spinner"></div>
+    </div>
+
+    <!-- 动态背景 -->
+    <div class="ambient-bg">
+        <div class="orb orb-1"></div>
+        <div class="orb orb-2"></div>
+        <div class="orb orb-3"></div>
+    </div>
+
+    <!-- 强制登录弹窗 -->
+    <div class="force-auth-overlay active" id="forceAuthOverlay">
+        <div class="auth-container">
+            <button class="skip-top-btn" onclick="skipAuth()">
+                <i class="fas fa-arrow-right"></i>
+                暂不登录，先浏览看看
+            </button>
+
+            <div class="auth-left">
+                <div class="brand-logo">
+                    <i class="fas fa-bell"></i>
+                    EventAlert
+                </div>
+                <div class="brand-tagline">
+                    不错过每一个重要时刻<br>
+                    智能提醒 · 实时同步 · 全国覆盖
+                </div>
+                <ul class="feature-list">
+                    <li><i class="fas fa-rocket"></i><span>2026年实时活动数据更新</span></li>
+                    <li><i class="fas fa-bell"></i><span>多层级智能提醒（7天/3天/1天/当天）</span></li>
+                    <li><i class="fas fa-map-marker-alt"></i><span>覆盖全国所有省市重要活动</span></li>
+                    <li><i class="fas fa-shield-alt"></i><span>安全可靠的报名提醒服务</span></li>
+                </ul>
+            </div>
+            <div class="auth-right">
+                <div class="auth-header">
+                    <h2 id="authTitle">欢迎回来</h2>
+                    <p id="authSubtitle">登录您的账号以继续</p>
+                </div>
+
+                <div class="auth-tabs">
+                    <button class="auth-tab active" onclick="switchAuthTab('login')">登录</button>
+                    <button class="auth-tab" onclick="switchAuthTab('register')">注册</button>
+                </div>
+
+                <!-- 登录表单 -->
+                <form class="auth-form active" id="loginForm" onsubmit="showCaptcha(event, 'login')">
+                    <div class="form-group">
+                        <label>手机号</label>
+                        <div class="input-wrapper">
+                            <i class="fas fa-phone"></i>
+                            <input type="tel" placeholder="请输入手机号" required id="loginPhone" maxlength="11" oninput="validatePhone(this)">
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label>验证码</label>
+                        <div class="verify-input-wrapper">
+                            <input type="text" placeholder="请输入6位验证码" required id="loginCode" maxlength="6">
+                            <button type="button" class="btn-verify" id="loginSendBtn" onclick="sendVerifyCode('login')">
+                                获取验证码
+                            </button>
+                        </div>
+                    </div>
+                    <button type="submit" class="btn-primary">立即登录</button>
+                    <div class="switch-form">
+                        还没有账号？ <a onclick="switchAuthTab('register')">立即注册</a>
+                    </div>
+                </form>
+
+                <!-- 注册表单 -->
+                <form class="auth-form" id="registerForm" onsubmit="showCaptcha(event, 'register')">
+                    <div class="form-group">
+                        <label>手机号</label>
+                        <div class="input-wrapper">
+                            <i class="fas fa-phone"></i>
+                            <input type="tel" placeholder="请输入手机号" required id="registerPhone" maxlength="11" oninput="validatePhone(this)">
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label>验证码</label>
+                        <div class="verify-input-wrapper">
+                            <input type="text" placeholder="请输入6位验证码" required id="registerCode" maxlength="6">
+                            <button type="button" class="btn-verify" id="registerSendBtn" onclick="sendVerifyCode('register')">
+                                获取验证码
+                            </button>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label>设置密码</label>
+                        <div class="input-wrapper">
+                            <i class="fas fa-lock"></i>
+                            <input type="password" placeholder="请设置密码（6-20位）" required id="registerPassword" minlength="6" maxlength="20">
+                        </div>
+                    </div>
+                    <button type="submit" class="btn-primary">立即注册</button>
+                    <div class="switch-form">
+                        已有账号？ <a onclick="switchAuthTab('login')">立即登录</a>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- 安全验证弹窗 -->
+    <div class="captcha-modal" id="captchaModal">
+        <div class="captcha-card">
+            <h3 style="margin-bottom: 0.5rem; font-size: 1.5rem;">🔒 安全验证</h3>
+            <p style="color: var(--text-muted); margin-bottom: 1rem;" id="captchaDesc">请完成验证以继续</p>
+            
+            <!-- 滑动拼图验证 -->
+            <div class="slider-captcha" id="sliderCaptcha">
+                <div class="slider-container" id="sliderContainer">
+                    <div class="slider-target" id="sliderTarget"></div>
+                    <div class="slider-puzzle" id="sliderPuzzle">
+                        <i class="fas fa-puzzle-piece"></i>
+                    </div>
+                    <div class="slider-track">
+                        <div class="slider-btn" id="sliderBtn">
+                            <i class="fas fa-arrows-alt-h"></i>
+                        </div>
+                        <span>拖动滑块完成拼图</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 色盲数字验证 -->
+            <div class="colorblind-captcha" id="colorblindCaptcha">
+                <p style="margin-bottom: 1rem; font-size: 1.1rem;">请点击所有包含数字 <strong id="targetNumber" style="color: var(--primary); font-size: 1.8rem; text-shadow: 0 0 10px rgba(99,102,241,0.5);">5</strong> 的色块</p>
+                <div class="colorblind-grid" id="colorblindGrid"></div>
+            </div>
+
+            <button onclick="closeCaptcha()" style="margin-top: 1rem; padding: 0.75rem 2rem; background: transparent; border: 1px solid rgba(255,255,255,0.2); color: var(--text-muted); border-radius: 999px; cursor: pointer; transition: all 0.3s;">
+                取消验证
+            </button>
+        </div>
+    </div>
+
+    <!-- 通用提醒设置弹窗 - 适用于所有活动类型 -->
+    <div class="reminder-modal" id="reminderModal">
+        <div class="reminder-card">
+            <div class="reminder-header">
+                <button class="reminder-close" onclick="closeReminderModal()">
+                    <i class="fas fa-times"></i>
+                </button>
+                <h2 class="reminder-title">设置提醒</h2>
+                <p class="reminder-subtitle">选择您希望的提醒时间和方式</p>
+            </div>
+            
+            <div class="reminder-content">
+                <!-- 活动信息展示 -->
+                <div class="reminder-event-info">
+                    <div class="reminder-icon-large" id="reminderEventIcon">
+                        <i class="fas fa-calendar"></i>
+                    </div>
+                    <div class="reminder-event-details">
+                        <h3 id="reminderEventTitle">活动名称</h3>
+                        <p id="reminderEventTime">活动时间</p>
+                    </div>
+                </div>
+
+                <!-- 提醒时间选择 -->
+                <div class="reminder-time-section">
+                    <div class="reminder-time-label">
+                        <i class="fas fa-clock"></i>
+                        提醒时间（可多选）
+                    </div>
+                    <div class="reminder-time-options" id="reminderTimeOptions">
+                        <button class="reminder-time-btn selected" data-days="7" onclick="toggleReminderTime(7)">
+                            <i class="fas fa-calendar-week"></i>
+                            <span>提前7天</span>
+                            <small>活动前一周</small>
+                        </button>
+                        <button class="reminder-time-btn selected" data-days="3" onclick="toggleReminderTime(3)">
+                            <i class="fas fa-calendar-day"></i>
+                            <span>提前3天</span>
+                            <small>充足准备时间</small>
+                        </button>
+                        <button class="reminder-time-btn selected" data-days="1" onclick="toggleReminderTime(1)">
+                            <i class="fas fa-bell"></i>
+                            <span>提前1天</span>
+                            <small>最后准备</small>
+                        </button>
+                        <button class="reminder-time-btn" data-days="0" onclick="toggleReminderTime(0)">
+                            <i class="fas fa-hourglass-start"></i>
+                            <span>活动当天</span>
+                            <small>当天提醒</small>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- 自定义提醒时间 -->
+                <div class="reminder-custom-date">
+                    <div class="reminder-time-label">
+                        <i class="fas fa-edit"></i>
+                        自定义提醒时间（可选）
+                    </div>
+                    <input type="datetime-local" class="reminder-date-input" id="customReminderTime">
+                </div>
+
+                <!-- 提醒方式 -->
+                <div class="reminder-method-section">
+                    <div class="reminder-time-label">
+                        <i class="fas fa-bullhorn"></i>
+                        提醒方式（可多选）
+                    </div>
+                    <div class="reminder-method-options" id="reminderMethodOptions">
+                        <button class="reminder-method-chip selected" data-method="sms" onclick="toggleReminderMethod('sms')">
+                            <i class="fas fa-comment-alt"></i> 短信
+                        </button>
+                        <button class="reminder-method-chip selected" data-method="email" onclick="toggleReminderMethod('email')">
+                            <i class="fas fa-envelope"></i> 邮件
+                        </button>
+                        <button class="reminder-method-chip selected" data-method="push" onclick="toggleReminderMethod('push')">
+                            <i class="fas fa-mobile-alt"></i> App推送
+                        </button>
+                        <button class="reminder-method-chip" data-method="wechat" onclick="toggleReminderMethod('wechat')">
+                            <i class="fab fa-weixin"></i> 微信
+                        </button>
+                    </div>
+                </div>
+
+                <!-- 保存按钮 -->
+                <button class="reminder-save-btn" id="reminderSaveBtn" onclick="saveReminder()">
+                    <i class="fas fa-save"></i>
+                    保存提醒设置
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- VIP 记录弹窗 -->
+    <div class="vip-record-modal" id="vipRecordModal">
+        <div class="vip-record-card">
+            <div class="vip-record-header">
+                <button class="vip-record-close" onclick="closeVipRecordModal()">
+                    <i class="fas fa-times"></i>
+                </button>
+                <h2 class="vip-record-title">记录 VIP 会员</h2>
+                <p class="vip-record-subtitle">填写您的 VIP 信息，到期前自动提醒</p>
+            </div>
+            
+            <div class="vip-record-content">
+                <!-- 服务信息展示 -->
+                <div class="vip-service-display">
+                    <div class="vip-service-icon-large" id="vipRecordIcon">
+                        <i class="fas fa-crown"></i>
+                    </div>
+                    <div class="vip-service-info">
+                        <h3 id="vipRecordServiceName">服务名称</h3>
+                        <p id="vipRecordServiceDesc">服务描述</p>
+                    </div>
+                </div>
+
+                <!-- 档位选择 -->
+                <div class="vip-tier-section">
+                    <div class="vip-tier-label">
+                        <i class="fas fa-layer-group"></i>
+                        选择您的会员档位
+                    </div>
+                    <div class="vip-tier-options" id="vipTierOptions">
+                        <button class="vip-tier-btn selected" data-tier="month" onclick="selectVipTier('month')">
+                            <i class="fas fa-calendar-day"></i>
+                            <span>月卡</span>
+                        </button>
+                        <button class="vip-tier-btn" data-tier="quarter" onclick="selectVipTier('quarter')">
+                            <i class="fas fa-calendar-week"></i>
+                            <span>季卡</span>
+                        </button>
+                        <button class="vip-tier-btn" data-tier="year" onclick="selectVipTier('year')">
+                            <i class="fas fa-calendar-alt"></i>
+                            <span>年卡</span>
+                        </button>
+                        <button class="vip-tier-btn" data-tier="forever" onclick="selectVipTier('forever')">
+                            <i class="fas fa-infinity"></i>
+                            <span>永久</span>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- 到期时间 -->
+                <div class="vip-date-section" id="vipDateSection">
+                    <div class="vip-tier-label">
+                        <i class="fas fa-clock"></i>
+                        会员到期时间
+                    </div>
+                    <div class="vip-date-input-wrapper">
+                        <i class="fas fa-calendar-alt"></i>
+                        <input type="datetime-local" class="vip-date-input" id="vipExpiryDate" onchange="calculateVipRemaining()">
+                    </div>
+                </div>
+
+                <!-- 计算结果 -->
+                <div class="vip-calculation" id="vipCalculation">
+                    <div class="vip-calc-item">
+                        <div class="vip-calc-value" id="calcTotalDays">-</div>
+                        <div class="vip-calc-label">总天数</div>
+                    </div>
+                    <div class="vip-calc-item">
+                        <div class="vip-calc-value" id="calcRemainingDays">-</div>
+                        <div class="vip-calc-label">剩余天数</div>
+                    </div>
+                    <div class="vip-calc-item">
+                        <div class="vip-calc-value" id="calcStatus">-</div>
+                        <div class="vip-calc-label">状态</div>
+                    </div>
+                </div>
+
+                <!-- 提醒设置 -->
+                <div class="vip-reminder-section">
+                    <div class="vip-tier-label">
+                        <i class="fas fa-bell"></i>
+                        提醒时间（可多选）
+                    </div>
+                    <div class="vip-reminder-options" id="vipReminderOptions">
+                        <button class="vip-reminder-chip selected" data-days="7" onclick="toggleVipReminder(7)">
+                            提前7天
+                        </button>
+                        <button class="vip-reminder-chip selected" data-days="3" onclick="toggleVipReminder(3)">
+                            提前3天
+                        </button>
+                        <button class="vip-reminder-chip selected" data-days="1" onclick="toggleVipReminder(1)">
+                            提前1天
+                        </button>
+                        <button class="vip-reminder-chip" data-days="0" onclick="toggleVipReminder(0)">
+                            当天提醒
+                        </button>
+                    </div>
+                </div>
+
+                <!-- 保存按钮 -->
+                <button class="vip-save-btn" id="vipSaveBtn" onclick="saveVipRecord()">
+                    <i class="fas fa-save"></i>
+                    保存记录
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 活动详情弹窗 -->
+    <div class="event-detail-modal" id="eventDetailModal">
+        <div class="event-detail-card" id="eventDetailCard">
+            <div class="event-detail-header" id="eventDetailHeader">
+                <button class="event-detail-close" onclick="closeEventDetail()">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <div class="event-detail-content" id="eventDetailContent">
+                <!-- 动态生成内容 -->
+            </div>
+        </div>
+    </div>
+
+    <!-- 主应用 -->
+    <div class="app-container" id="appContainer">
+        <!-- 导航栏 -->
+        <nav class="navbar">
+            <div class="nav-content">
+                <div class="nav-logo" onclick="showHome()">
+                    <i class="fas fa-bell"></i>
+                    EventAlert · 2026
+                </div>
+                <div class="nav-actions">
+                    <button class="nav-btn active" id="homeBtn" onclick="showHome()">
+                        <i class="fas fa-home"></i> 首页
+                    </button>
+                    <button class="nav-btn" id="searchBtn" onclick="showSearch()">
+                        <i class="fas fa-search"></i> 搜索
+                    </button>
+                    <button class="nav-btn" id="remindersBtn" onclick="showMyReminders()">
+                        <i class="fas fa-bell"></i> 我的提醒
+                        <span class="reminders-count hidden" id="navRemindersCount">0</span>
+                    </button>
+                    <button class="nav-btn" id="loginNavBtn" onclick="showAuthModal()">
+                        <i class="fas fa-sign-in-alt"></i> 登录
+                    </button>
+                    <button class="nav-btn" id="registerNavBtn" onclick="showAuthModal(true)">
+                        <i class="fas fa-user-plus"></i> 注册
+                    </button>
+                    <div class="user-avatar hidden" id="userAvatar" onclick="logout()">访</div>
+                </div>
+            </div>
+        </nav>
+
+        <!-- 首页 - 分类模块 -->
+        <main class="main-content" id="homePage">
+            <section class="hero-section" style="text-align: center; margin-bottom: 3rem;">
+                <h1 class="hero-title" style="font-size: 3rem; font-weight: 800; margin-bottom: 1rem; background: linear-gradient(135deg, #fff, var(--primary)); -webkit-background-clip: text; -webkit-text-fill-color: transparent;">探索精彩活动</h1>
+                <p class="hero-subtitle" style="color: var(--text-secondary); font-size: 1.2rem;">选择您感兴趣的分类，发现即将开始的重要报名</p>
+            </section>
+
+            <!-- 演唱会分类 -->
+            <section class="category-section">
+                <div class="section-header">
+                    <h2 class="section-title">
+                        <i class="fas fa-music" style="color: #ec4899;"></i>
+                        演唱会
+                    </h2>
+                    <button class="view-all-btn" onclick="showCategoryEvents('concert')">
+                        查看全部 <i class="fas fa-arrow-right"></i>
+                    </button>
+                </div>
+                <div class="category-grid" id="concertGrid"></div>
+            </section>
+
+            <!-- 马拉松分类 -->
+            <section class="category-section">
+                <div class="section-header">
+                    <h2 class="section-title">
+                        <i class="fas fa-running" style="color: #10b981;"></i>
+                        马拉松
+                    </h2>
+                    <button class="view-all-btn" onclick="showCategoryEvents('marathon')">
+                        查看全部 <i class="fas fa-arrow-right"></i>
+                    </button>
+                </div>
+                <div class="category-grid" id="marathonGrid"></div>
+            </section>
+
+            <!-- 考试报名分类 -->
+            <section class="category-section">
+                <div class="section-header">
+                    <h2 class="section-title">
+                        <i class="fas fa-graduation-cap" style="color: #3b82f6;"></i>
+                        考试报名
+                    </h2>
+                    <button class="view-all-btn" onclick="showCategoryEvents('exam')">
+                        查看全部 <i class="fas fa-arrow-right"></i>
+                    </button>
+                </div>
+                <div class="category-grid" id="examGrid"></div>
+            </section>
+
+            <!-- VIP续费分类 -->
+            <section class="category-section">
+                <div class="section-header">
+                    <h2 class="section-title">
+                        <i class="fas fa-crown" style="color: #f59e0b;"></i>
+                        VIP续费提醒
+                    </h2>
+                    <button class="view-all-btn" onclick="showCategoryEvents('vip')">
+                        查看全部 <i class="fas fa-arrow-right"></i>
+                    </button>
+                </div>
+                <div class="category-grid" id="vipGrid"></div>
+            </section>
+        </main>
+
+        <!-- 搜索页面 -->
+        <main class="main-content search-page" id="searchPage">
+            <div class="search-header">
+                <h1 class="search-title">搜索活动</h1>
+                <p style="color: var(--text-muted);">输入关键词搜索活动，或使用定位查找附近活动</p>
+            </div>
+
+            <div class="search-container">
+                <!-- 搜索框 -->
+                <div class="search-box-large">
+                    <i class="fas fa-search"></i>
+                    <input type="text" placeholder="搜索活动名称、地点、类型..." id="mainSearchInput" oninput="performSearch()" aria-label="搜索活动">
+                </div>
+
+                <!-- 定位按钮 -->
+                <div style="text-align: center;">
+                    <button class="location-btn" id="locationBtn" onclick="getCurrentLocation()">
+                        <i class="fas fa-location-arrow"></i>
+                        <span>获取我的位置</span>
+                    </button>
+                </div>
+
+                <!-- 定位结果 -->
+                <div class="location-result" id="locationResult">
+                    <i class="fas fa-check-circle"></i>
+                    <span id="locationText">定位成功：北京市朝阳区</span>
+                </div>
+
+                <!-- 地图容器 -->
+                <div class="map-container" id="mapContainer">
+                    <div style="text-align: center;">
+                        <i class="fas fa-map-marked-alt" style="font-size: 3rem; margin-bottom: 1rem; display: block;"></i>
+                        <p>地图加载中...</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 热门搜索 -->
+            <div class="hot-searches">
+                <h3><i class="fas fa-fire" style="color: #ef4444;"></i> 热门搜索</h3>
+                <div class="hot-tags">
+                    <span class="hot-tag" onclick="quickSearch('周杰伦')">周杰伦演唱会</span>
+                    <span class="hot-tag" onclick="quickSearch('马拉松')">马拉松</span>
+                    <span class="hot-tag" onclick="quickSearch('北京')">北京活动</span>
+                    <span class="hot-tag" onclick="quickSearch('上海')">上海活动</span>
+                    <span class="hot-tag" onclick="quickSearch('四六级')">英语四六级</span>
+                    <span class="hot-tag" onclick="quickSearch('研究生')">研究生考试</span>
+                    <span class="hot-tag" onclick="quickSearch('VIP')">VIP续费</span>
+                    <span class="hot-tag" onclick="quickSearch('深圳')">深圳活动</span>
+                </div>
+            </div>
+
+            <!-- 搜索结果 -->
+            <div class="search-results" id="searchResults">
+                <!-- 动态生成 -->
+            </div>
+        </main>
+
+        <!-- 分类事件列表页 -->
+        <main class="main-content events-page" id="eventsPage">
+            <button class="back-btn" onclick="showHome()">
+                <i class="fas fa-arrow-left"></i> 返回首页
+            </button>
+            <h2 class="section-title" id="eventsPageTitle" style="margin-bottom: 2rem;">
+                <i class="fas fa-music"></i> 演唱会
+            </h2>
+            
+            <div class="filter-bar">
+                <div class="search-box-large" style="margin-bottom: 0; flex: 1; min-width: 250px;">
+                    <i class="fas fa-search"></i>
+                    <input type="text" placeholder="搜索活动..." id="categorySearchInput" oninput="filterCategoryEvents()" style="border-radius: 12px;" aria-label="搜索活动">
+                </div>
+                
+                <!-- 全国地区选择下拉 -->
+                <div class="city-dropdown" id="cityDropdown">
+                    <button class="city-dropdown-toggle" id="cityDropdownToggle" onclick="toggleCityDropdown(event)">
+                        <i class="fas fa-map-marker-alt"></i>
+                        <span id="currentRegionText">全部地区</span>
+                        <i class="fas fa-chevron-down" style="margin-left: 0.5rem; font-size: 0.75rem;"></i>
+                    </button>
+                    <div class="city-dropdown-content" id="cityDropdownContent">
+                        <!-- 直辖市 -->
+                        <div class="city-section">
+                            <div class="city-section-title"><i class="fas fa-star"></i> 直辖市</div>
+                            <div class="city-grid" id="municipalitiesGrid"></div>
+                        </div>
+                        <!-- 省份 -->
+                        <div class="city-section">
+                            <div class="city-section-title"><i class="fas fa-map"></i> 省份</div>
+                            <div class="city-grid" id="provincesGrid"></div>
+                        </div>
+                        <!-- 自治区 -->
+                        <div class="city-section">
+                            <div class="city-section-title"><i class="fas fa-flag"></i> 自治区</div>
+                            <div class="city-grid" id="autonomousRegionsGrid"></div>
+                        </div>
+                        <!-- 特别行政区 -->
+                        <div class="city-section">
+                            <div class="city-section-title"><i class="fas fa-crown"></i> 特别行政区</div>
+                            <div class="city-grid" id="specialRegionsGrid"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="events-grid" id="categoryEventsGrid"></div>
+        </main>
+
+        <!-- 我的提醒页面 -->
+        <main class="main-content my-reminders-page" id="myRemindersPage">
+            <div class="reminders-header">
+                <h2>
+                    <i class="fas fa-bell" style="color: var(--primary);"></i>
+                    我的提醒
+                    <span class="reminders-count" id="pageRemindersCount">0</span>
+                </h2>
+                <button class="nav-btn" onclick="showHome()">
+                    <i class="fas fa-arrow-left"></i> 返回首页
+                </button>
+            </div>
+            
+            <div id="remindersList"></div>
+        </main>
+    </div>
+
+    <script>
+        // ==========================================
+        // 配置与常量
+        // ==========================================
+        const CONFIG = {
+            vipTiers: {
+                month: { name: '月卡', days: 30, icon: 'fa-calendar-day' },
+                quarter: { name: '季卡', days: 90, icon: 'fa-calendar-week' },
+                year: { name: '年卡', days: 365, icon: 'fa-calendar-alt' },
+                forever: { name: '永久', days: -1, icon: 'fa-infinity' }
+            }
+        };
+
+        // ==========================================
+        // 数据层 - 全国34个省级行政区
+        // ==========================================
+        const allRegions = {
+            municipalities: [
+                { key: 'beijing', name: '北京', lat: 39.904, lng: 116.407 },
+                { key: 'tianjin', name: '天津', lat: 39.084, lng: 117.201 },
+                { key: 'shanghai', name: '上海', lat: 31.230, lng: 121.473 },
+                { key: 'chongqing', name: '重庆', lat: 29.563, lng: 106.551 }
+            ],
+            provinces: [
+                { key: 'hebei', name: '河北', lat: 38.045, lng: 114.513 },
+                { key: 'shanxi', name: '山西', lat: 37.857, lng: 112.549 },
+                { key: 'liaoning', name: '辽宁', lat: 41.796, lng: 123.429 },
+                { key: 'jilin', name: '吉林', lat: 43.817, lng: 125.324 },
+                { key: 'heilongjiang', name: '黑龙江', lat: 45.756, lng: 126.642 },
+                { key: 'jiangsu', name: '江苏', lat: 32.061, lng: 118.763 },
+                { key: 'zhejiang', name: '浙江', lat: 30.267, lng: 120.153 },
+                { key: 'anhui', name: '安徽', lat: 31.861, lng: 117.285 },
+                { key: 'fujian', name: '福建', lat: 26.075, lng: 119.306 },
+                { key: 'jiangxi', name: '江西', lat: 28.682, lng: 115.857 },
+                { key: 'shandong', name: '山东', lat: 36.651, lng: 117.120 },
+                { key: 'henan', name: '河南', lat: 34.746, lng: 113.625 },
+                { key: 'hubei', name: '湖北', lat: 30.592, lng: 114.305 },
+                { key: 'hunan', name: '湖南', lat: 28.228, lng: 112.938 },
+                { key: 'guangdong', name: '广东', lat: 23.129, lng: 113.264 },
+                { key: 'hainan', name: '海南', lat: 20.044, lng: 110.200 },
+                { key: 'sichuan', name: '四川', lat: 30.572, lng: 104.066 },
+                { key: 'guizhou', name: '贵州', lat: 26.647, lng: 106.630 },
+                { key: 'yunnan', name: '云南', lat: 25.038, lng: 102.718 },
+                { key: 'shaanxi', name: '陕西', lat: 34.341, lng: 108.940 },
+                { key: 'gansu', name: '甘肃', lat: 36.061, lng: 103.834 },
+                { key: 'qinghai', name: '青海', lat: 36.617, lng: 101.778 },
+                { key: 'taiwan', name: '台湾', lat: 25.033, lng: 121.565 }
+            ],
+            autonomousRegions: [
+                { key: 'neimenggu', name: '内蒙古', lat: 40.842, lng: 111.751 },
+                { key: 'guangxi', name: '广西', lat: 22.817, lng: 108.366 },
+                { key: 'xizang', name: '西藏', lat: 29.650, lng: 91.172 },
+                { key: 'ningxia', name: '宁夏', lat: 38.487, lng: 106.230 },
+                { key: 'xinjiang', name: '新疆', lat: 43.793, lng: 87.628 }
+            ],
+            specialRegions: [
+                { key: 'hongkong', name: '香港', lat: 22.319, lng: 114.169 },
+                { key: 'macao', name: '澳门', lat: 22.198, lng: 113.543 }
+            ]
+        };
+
+        // 合并所有地区
+        const cityCoordinates = {};
+        Object.values(allRegions).flat().forEach(region => {
+            cityCoordinates[region.key] = region;
+        });
+
+        // ==========================================
+        // 工具函数
+        // ==========================================
+        
+        /**
+         * 生成动态日期（确保为未来时间）
+         */
+        function generateFutureDate(month, day, hour = 9, minute = 0) {
+            const now = new Date();
+            const currentYear = now.getFullYear();
+            let year = currentYear > 2026 ? currentYear : 2026;
+            
+            let date = new Date(year, month - 1, day, hour, minute);
+            
+            // 如果日期已过，顺延到下一年
+            if (date < now) {
+                date = new Date(year + 1, month - 1, day, hour, minute);
+            }
+            
+            return date.toISOString();
+        }
+
+        /**
+         * 计算两点间距离（km）
+         */
+        function calculateDistance(lat1, lng1, lat2, lng2) {
+            const R = 6371;
+            const dLat = (lat2 - lat1) * Math.PI / 180;
+            const dLng = (lng2 - lng1) * Math.PI / 180;
+            const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
+                      Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+                      Math.sin(dLng/2) * Math.sin(dLng/2);
+            const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+            return R * c;
+        }
+
+        /**
+         * 获取剩余天数
+         */
+        function getDaysLeft(dateStr) {
+            const start = new Date(dateStr);
+            const now = new Date();
+            const diff = start - now;
+            return Math.ceil(diff / (1000 * 60 * 60 * 24));
+        }
+
+        /**
+         * 格式化日期
+         */
+        function formatDate(dateStr) {
+            const date = new Date(dateStr);
+            return `${date.getFullYear()}年${date.getMonth() + 1}月${date.getDate()}日`;
+        }
+
+        /**
+         * 格式化日期时间用于输入框
+         */
+        function formatDateTimeLocal(date) {
+            const year = date.getFullYear();
+            const month = String(date.getMonth() + 1).padStart(2, '0');
+            const day = String(date.getDate()).padStart(2, '0');
+            const hours = String(date.getHours()).padStart(2, '0');
+            const minutes = String(date.getMinutes()).padStart(2, '0');
+            return `${year}-${month}-${day}T${hours}:${minutes}`;
+        }
+
+        /**
+         * 获取倒计时文本
+         */
+        function getCountdownText(dateStr) {
+            const days = getDaysLeft(dateStr);
+            if (days < 0) return '已过期';
+            if (days === 0) return '今天';
+            if (days === 1) return '明天';
+            return `还剩 ${days} 天`;
+        }
+
+        /**
+         * 显示 Toast 提示
+         */
+        function showToast(message, type = 'info') {
+            const toast = document.createElement('div');
+            const colors = {
+                success: 'rgba(16, 185, 129, 0.9)',
+                error: 'rgba(239, 68, 68, 0.9)',
+                warning: 'rgba(245, 158, 11, 0.9)',
+                info: 'rgba(99, 102, 241, 0.9)'
+            };
+            
+            toast.style.cssText = `
+                position: fixed;
+                top: 100px;
+                left: 50%;
+                transform: translateX(-50%);
+                padding: 1rem 2rem;
+                background: ${colors[type]};
+                color: white;
+                border-radius: 999px;
+                font-weight: 600;
+                z-index: 99999;
+                animation: slideDown 0.3s ease;
+                backdrop-filter: blur(10px);
+                box-shadow: 0 10px 40px rgba(0,0,0,0.3);
+            `;
+            toast.textContent = message;
+            document.body.appendChild(toast);
+            
+            setTimeout(() => {
+                toast.style.animation = 'slideUp 0.3s ease';
+                setTimeout(() => toast.remove(), 300);
+            }, 3000);
+        }
+
+        // ==========================================
+        // 事件数据生成器 - 基于2026年真实数据
+        // ==========================================
+        const eventsData = [
+            // 演唱会数据 - 基于2026年真实行程
+            {
+                id: 1,
+                title: "周杰伦「烟花嘉年华」世界巡回演唱会 - 杭州站",
+                category: "concert",
+                region: "zhejiang",
+                startDate: generateFutureDate(4, 18, 19, 30),
+                location: "杭州奥体中心体育场（大莲花）",
+                description: "连开3场，主题「烟花」，全新舞美设计，将演唱最新专辑歌曲。周杰伦将带来全新的视听盛宴，包括经典歌曲重新编曲和全新专辑首唱。",
+                image: "linear-gradient(135deg, #8b5cf6, #ec4899)",
+                badge: "urgent",
+                coordinates: { lat: 30.229, lng: 120.084 }
+            },
+            {
+                id: 2,
+                title: "周杰伦「烟花嘉年华」世界巡回演唱会 - 南京站",
+                category: "concert",
+                region: "jiangsu",
+                startDate: generateFutureDate(5, 2, 19, 30),
+                location: "南京奥体中心体育场",
+                description: "五一假期特别场，南京站将呈现独特的江南文化元素。",
+                image: "linear-gradient(135deg, #f59e0b, #ef4444)",
+                badge: "warning",
+                coordinates: { lat: 32.061, lng: 118.763 }
+            },
+            {
+                id: 3,
+                title: "周杰伦「烟花嘉年华」世界巡回演唱会 - 北京站",
+                category: "concert",
+                region: "beijing",
+                startDate: generateFutureDate(6, 26, 19, 30),
+                location: "国家体育场（鸟巢）",
+                description: "连开3场，十万人体育场震撼开唱。鸟巢特别版舞美设计。",
+                image: "linear-gradient(135deg, #3b82f6, #8b5cf6)",
+                badge: "info",
+                coordinates: { lat: 39.993, lng: 116.397 }
+            },
+            {
+                id: 4,
+                title: "薛之谦「万兽之王」巡回演唱会 - 广州站",
+                category: "concert",
+                region: "guangdong",
+                startDate: generateFutureDate(3, 20, 19, 30),
+                location: "广州天河体育中心体育场",
+                description: "连开3场，四面台设计，巨型兽笼装置。沉浸式体验。",
+                image: "linear-gradient(135deg, #10b981, #06b6d4)",
+                badge: "urgent",
+                coordinates: { lat: 23.135, lng: 113.325 }
+            },
+            {
+                id: 5,
+                title: "邓紫棋 I AM GLORIA 2.0 - 深圳站",
+                category: "concert",
+                region: "guangdong",
+                startDate: generateFutureDate(9, 18, 19, 30),
+                location: "深圳大运中心体育场",
+                description: "连开10场，创华语女歌手连开纪录。",
+                image: "linear-gradient(135deg, #ec4899, #8b5cf6)",
+                badge: "info",
+                coordinates: { lat: 22.695, lng: 114.235 }
+            },
+            {
+                id: 6,
+                title: "华晨宇「火星演唱会」- 合肥站",
+                category: "concert",
+                region: "anhui",
+                startDate: generateFutureDate(3, 8, 19, 30),
+                location: "合肥体育中心体育场",
+                description: "3月8日-9日连开，火星人回家。",
+                image: "linear-gradient(135deg, #f97316, #ea580c)",
+                badge: "urgent",
+                coordinates: { lat: 31.861, lng: 117.285 }
+            },
+            {
+                id: 7,
+                title: "张学友60+巡回演唱会 - 苏州站",
+                category: "concert",
+                region: "jiangsu",
+                startDate: generateFutureDate(12, 19, 19, 30),
+                location: "苏州奥林匹克体育中心",
+                description: "12月19日-21日连开3场，歌神不老。",
+                image: "linear-gradient(135deg, #3b82f6, #1d4ed8)",
+                badge: "info",
+                coordinates: { lat: 31.299, lng: 120.585 }
+            },
+            
+            // 马拉松数据 - 基于2026年真实赛程
+            {
+                id: 101,
+                title: "2026北京马拉松",
+                category: "marathon",
+                region: "beijing",
+                startDate: generateFutureDate(10, 18, 7, 30),
+                location: "天安门广场",
+                description: "中国田径协会金牌赛事，预计参赛规模30000人。国马荣誉。",
+                image: "linear-gradient(135deg, #ef4444, #dc2626)",
+                badge: "info",
+                coordinates: { lat: 39.904, lng: 116.407 }
+            },
+            {
+                id: 102,
+                title: "2026上海马拉松",
+                category: "marathon",
+                region: "shanghai",
+                startDate: generateFutureDate(12, 6, 7, 0),
+                location: "外滩金牛广场",
+                description: "白金标赛事，亚洲顶级马拉松赛事之一。",
+                image: "linear-gradient(135deg, #ec4899, #be185d)",
+                badge: "info",
+                coordinates: { lat: 31.231, lng: 121.487 }
+            },
+            {
+                id: 103,
+                title: "2026厦门马拉松",
+                category: "marathon",
+                region: "fujian",
+                startDate: generateFutureDate(1, 3, 7, 30),
+                location: "厦门国际会展中心",
+                description: "中国田协金牌赛事，最美环岛赛道。",
+                image: "linear-gradient(135deg, #06b6d4, #0891b2)",
+                badge: "urgent",
+                coordinates: { lat: 24.479, lng: 118.089 }
+            },
+            {
+                id: 104,
+                title: "2026无锡马拉松",
+                category: "marathon",
+                region: "jiangsu",
+                startDate: generateFutureDate(3, 22, 7, 0),
+                location: "无锡太湖大道",
+                description: "3月22日开跑，人在画中跑。",
+                image: "linear-gradient(135deg, #f59e0b, #d97706)",
+                badge: "warning",
+                coordinates: { lat: 31.491, lng: 120.312 }
+            },
+            {
+                id: 105,
+                title: "2026重庆马拉松",
+                category: "marathon",
+                region: "chongqing",
+                startDate: generateFutureDate(3, 15, 7, 30),
+                location: "重庆南滨路",
+                description: "3月15日开跑，山城特色赛道。",
+                image: "linear-gradient(135deg, #a855f7, #9333ea)",
+                badge: "warning",
+                coordinates: { lat: 29.563, lng: 106.551 }
+            },
+            {
+                id: 106,
+                title: "2026武汉马拉松",
+                category: "marathon",
+                region: "hubei",
+                startDate: generateFutureDate(3, 29, 7, 30),
+                location: "武汉江滩",
+                description: "3月29日开跑，好汉归来。",
+                image: "linear-gradient(135deg, #3b82f6, #2563eb)",
+                badge: "warning",
+                coordinates: { lat: 30.592, lng: 114.305 }
+            },
+            
+            // 考试报名数据 - 基于2026年真实时间表
+            {
+                id: 201,
+                title: "2026年上半年全国计算机等级考试（NCRE）",
+                category: "exam",
+                region: "all",
+                startDate: generateFutureDate(1, 5, 9, 0),
+                location: "全国各地考点",
+                description: "3月28日-30日考试，含一级至四级全部科目。",
+                image: "linear-gradient(135deg, #3b82f6, #06b6d4)",
+                badge: "urgent",
+                coordinates: null
+            },
+            {
+                id: 202,
+                title: "2026年上半年中小学教师资格考试（笔试）",
+                category: "exam",
+                region: "all",
+                startDate: generateFutureDate(1, 9, 9, 0),
+                location: "各省教育考试院",
+                description: "3月15日考试，教师梦起点。",
+                image: "linear-gradient(135deg, #8b5cf6, #ec4899)",
+                badge: "urgent",
+                coordinates: null
+            },
+            {
+                id: 203,
+                title: "2026年全国研究生入学考试网上报名",
+                category: "exam",
+                region: "all",
+                startDate: generateFutureDate(10, 5, 9, 0),
+                location: "中国研究生招生信息网",
+                description: "2025年12月21日-22日初试，考研人加油！",
+                image: "linear-gradient(135deg, #f59e0b, #f97316)",
+                badge: "info",
+                coordinates: null
+            },
+            {
+                id: 204,
+                title: "2026年上半年大学英语四六级考试（CET）",
+                category: "exam",
+                region: "all",
+                startDate: generateFutureDate(3, 18, 9, 0),
+                location: "各高校考点",
+                description: "6月15日考试，3月18日-25日报名。",
+                image: "linear-gradient(135deg, #10b981, #059669)",
+                badge: "warning",
+                coordinates: null
+            },
+            {
+                id: 205,
+                title: "2026年全国会计专业技术初级资格考试",
+                category: "exam",
+                region: "all",
+                startDate: generateFutureDate(1, 3, 9, 0),
+                location: "全国会计资格评价网",
+                description: "5月17日-20日考试，1月3日-24日报名。",
+                image: "linear-gradient(135deg, #6366f1, #4f46e5)",
+                badge: "urgent",
+                coordinates: null
+            },
+            
+            // VIP续费数据
+            {
+                id: 401,
+                title: "Apple Music",
+                category: "vip",
+                region: "all",
+                startDate: generateFutureDate(1, 1, 0, 0),
+                location: "Apple ID设置",
+                description: "畅听全球音乐，无损音质，空间音频体验。",
+                image: "linear-gradient(135deg, #f43f5e, #ec4899)",
+                badge: "urgent",
+                coordinates: null,
+                icon: "fa-music"
+            },
+            {
+                id: 402,
+                title: "Netflix",
+                category: "vip",
+                region: "all",
+                startDate: generateFutureDate(2, 1, 0, 0),
+                location: "Netflix官网",
+                description: "4K超高清流媒体，海量影视资源，多设备同时观看。",
+                image: "linear-gradient(135deg, #ef4444, #dc2626)",
+                badge: "urgent",
+                coordinates: null,
+                icon: "fa-play-circle"
+            },
+            {
+                id: 403,
+                title: "爱奇艺黄金VIP",
+                category: "vip",
+                region: "all",
+                startDate: generateFutureDate(3, 1, 0, 0),
+                location: "爱奇艺APP",
+                description: "热剧抢先看，跳过广告，蓝光画质，杜比音效。",
+                image: "linear-gradient(135deg, #00b5e2, #06b6d4)",
+                badge: "warning",
+                coordinates: null,
+                icon: "fa-play-circle"
+            },
+            {
+                id: 404,
+                title: "腾讯视频VIP",
+                category: "vip",
+                region: "all",
+                startDate: generateFutureDate(3, 15, 0, 0),
+                location: "腾讯视频APP",
+                description: "独家内容，超前点播，NBA直播，动漫抢先看。",
+                image: "linear-gradient(135deg, #f59e0b, #f97316)",
+                badge: "warning",
+                coordinates: null,
+                icon: "fa-play-circle"
+            },
+            {
+                id: 405,
+                title: "哔哩哔哩大会员",
+                category: "vip",
+                region: "all",
+                startDate: generateFutureDate(4, 15, 0, 0),
+                location: "哔哩哔哩APP",
+                description: "番剧抢先看，高清画质，专属挂件，漫读券赠送。",
+                image: "linear-gradient(135deg, #f43f5e, #ec4899)",
+                badge: "warning",
+                coordinates: null,
+                icon: "fa-tv"
+            },
+            {
+                id: 406,
+                title: "网易云音乐黑胶VIP",
+                category: "vip",
+                region: "all",
+                startDate: generateFutureDate(5, 1, 0, 0),
+                location: "网易云音乐APP",
+                description: "无损音质，鲸云音效，专属皮肤，免广告。",
+                image: "linear-gradient(135deg, #ef4444, #dc2626)",
+                badge: "warning",
+                coordinates: null,
+                icon: "fa-music"
+            },
+            {
+                id: 407,
+                title: "京东PLUS会员",
+                category: "vip",
+                region: "all",
+                startDate: generateFutureDate(6, 1, 0, 0),
+                location: "京东APP",
+                description: "10倍返京豆，运费券，专属折扣，优先客服。",
+                image: "linear-gradient(135deg, #ef4444, #dc2626)",
+                badge: "warning",
+                coordinates: null,
+                icon: "fa-shopping-cart"
+            },
+            {
+                id: 408,
+                title: "淘宝88VIP会员",
+                category: "vip",
+                region: "all",
+                startDate: generateFutureDate(6, 15, 0, 0),
+                location: "淘宝APP",
+                description: "含优酷、网易云、饿了么等权益，一卡多用。",
+                image: "linear-gradient(135deg, #f97316, #ea580c)",
+                badge: "warning",
+                coordinates: null,
+                icon: "fa-shopping-bag"
+            },
+            {
+                id: 409,
+                title: "ChatGPT Plus",
+                category: "vip",
+                region: "all",
+                startDate: generateFutureDate(10, 1, 0, 0),
+                location: "OpenAI官网",
+                description: "GPT-4访问权限，更快的响应速度，优先使用新功能。",
+                image: "linear-gradient(135deg, #10b981, #059669)",
+                badge: "warning",
+                coordinates: null,
+                icon: "fa-robot"
+            },
+            {
+                id: 410,
+                title: "百度网盘超级会员",
+                category: "vip",
+                region: "all",
+                startDate: generateFutureDate(11, 1, 0, 0),
+                location: "百度网盘APP",
+                description: "极速下载，5T空间，在线解压，视频倍速。",
+                image: "linear-gradient(135deg, #3b82f6, #2563eb)",
+                badge: "warning",
+                coordinates: null,
+                icon: "fa-cloud"
+            },
+            {
+                id: 411,
+                title: "WPS超级会员",
+                category: "vip",
+                region: "all",
+                startDate: generateFutureDate(4, 1, 0, 0),
+                location: "WPS Office",
+                description: "PDF转Word，全文翻译，云空间，模板免费。",
+                image: "linear-gradient(135deg, #f59e0b, #d97706)",
+                badge: "warning",
+                coordinates: null,
+                icon: "fa-file-word"
+            },
+            {
+                id: 412,
+                title: "知乎盐选会员",
+                category: "vip",
+                region: "all",
+                startDate: generateFutureDate(5, 15, 0, 0),
+                location: "知乎APP",
+                description: "优质专栏，电子书，Live讲座，去广告。",
+                image: "linear-gradient(135deg, #3b82f6, #1d4ed8)",
+                badge: "warning",
+                coordinates: null,
+                icon: "fa-book"
+            },
+            {
+                id: 413,
+                title: "Keep会员",
+                category: "vip",
+                region: "all",
+                startDate: generateFutureDate(7, 1, 0, 0),
+                location: "Keep APP",
+                description: "专属课程，饮食计划，训练分析，商城折扣。",
+                image: "linear-gradient(135deg, #10b981, #059669)",
+                badge: "warning",
+                coordinates: null,
+                icon: "fa-running"
+            },
+            {
+                id: 414,
+                title: "QQ音乐绿钻",
+                category: "vip",
+                region: "all",
+                startDate: generateFutureDate(9, 1, 0, 0),
+                location: "QQ音乐APP",
+                description: "无损音质，下载特权，专属皮肤，演唱会优先购。",
+                image: "linear-gradient(135deg, #f59e0b, #d97706)",
+                badge: "warning",
+                coordinates: null,
+                icon: "fa-music"
+            },
+            {
+                id: 415,
+                title: "EventAlert 高级会员",
+                category: "vip",
+                region: "all",
+                startDate: generateFutureDate(12, 31, 23, 59),
+                location: "EventAlert APP",
+                description: "无限提醒，优先通知，专属客服，数据导出。",
+                image: "linear-gradient(135deg, #fbbf24, #f59e0b)",
+                badge: "warning",
+                coordinates: null,
+                icon: "fa-crown"
+            }
+        ];
+
+        // ==========================================
+        // 状态管理
+        // ==========================================
+        const state = {
+            currentCategory: 'all',
+            currentRegion: 'all',
+            searchQuery: '',
+            userReminders: new Map(), // 改为Map存储详细设置 { eventId: { times: [], methods: [], customTime: null } }
+            isLoggedIn: false,
+            currentAuthAction: null,
+            captchaType: null,
+            userLocation: null,
+            vipRecords: {}, // 存储用户的VIP记录 { eventId: { tier, expiryDate, reminders } }
+            currentVipEvent: null,
+            selectedVipTier: 'month',
+            selectedVipReminders: [7, 3, 1], // 默认提醒时间
+            // 通用提醒设置
+            currentReminderEvent: null,
+            selectedReminderTimes: [7, 3, 1], // 默认提醒时间
+            selectedReminderMethods: ['sms', 'email', 'push'], // 默认提醒方式
+            // 验证码倒计时
+            verifyCountdown: {
+                login: 0,
+                register: 0
+            }
+        };
+
+        // DOM 元素缓存
+        const dom = {};
+
+        // ==========================================
+        // 初始化
+        // ==========================================
+        window.addEventListener('load', () => {
+            cacheDOMElements();
+            
+            setTimeout(() => {
+                dom.loader.classList.add('hidden');
+            }, 800);
+            
+            initCityDropdown();
+            renderCategoryPreviews();
+            updateCountdowns();
+            setInterval(updateCountdowns, 60000);
+            bindGlobalEvents();
+        });
+
+        function cacheDOMElements() {
+            dom.loader = document.getElementById('loader');
+            dom.forceAuthOverlay = document.getElementById('forceAuthOverlay');
+            dom.captchaModal = document.getElementById('captchaModal');
+            dom.reminderModal = document.getElementById('reminderModal');
+            dom.vipRecordModal = document.getElementById('vipRecordModal');
+            dom.eventDetailModal = document.getElementById('eventDetailModal');
+            dom.userAvatar = document.getElementById('userAvatar');
+            dom.loginNavBtn = document.getElementById('loginNavBtn');
+            dom.registerNavBtn = document.getElementById('registerNavBtn');
+            dom.navRemindersCount = document.getElementById('navRemindersCount');
+            dom.pageRemindersCount = document.getElementById('pageRemindersCount');
+        }
+
+        function bindGlobalEvents() {
+            document.addEventListener('click', (e) => {
+                const dropdown = document.getElementById('cityDropdown');
+                if (!dropdown.contains(e.target)) {
+                    document.getElementById('cityDropdownContent').classList.remove('active');
+                    document.getElementById('cityDropdownToggle').classList.remove('active');
+                }
+            });
+
+            document.addEventListener('keydown', (e) => {
+                if (e.key === 'Escape') {
+                    closeEventDetail();
+                    closeCaptcha();
+                    closeVipRecordModal();
+                    closeReminderModal();
+                }
+            });
+
+            dom.eventDetailModal.addEventListener('click', (e) => {
+                if (e.target === dom.eventDetailModal) closeEventDetail();
+            });
+            
+            dom.vipRecordModal.addEventListener('click', (e) => {
+                if (e.target === dom.vipRecordModal) closeVipRecordModal();
+            });
+            
+            dom.reminderModal.addEventListener('click', (e) => {
+                if (e.target === dom.reminderModal) closeReminderModal();
+            });
+        }
+
+        // ==========================================
+        // 城市选择功能
+        // ==========================================
+        function initCityDropdown() {
+            const createCityButtons = (regions, containerId) => {
+                const container = document.getElementById(containerId);
+                container.innerHTML = regions.map(city => 
+                    `<button class="city-btn" data-key="${city.key}" onclick="selectCity('${city.key}', '${city.name}', event)">${city.name}</button>`
+                ).join('');
+            };
+
+            createCityButtons(allRegions.municipalities, 'municipalitiesGrid');
+            createCityButtons(allRegions.provinces, 'provincesGrid');
+            createCityButtons(allRegions.autonomousRegions, 'autonomousRegionsGrid');
+            createCityButtons(allRegions.specialRegions, 'specialRegionsGrid');
+        }
+
+        function toggleCityDropdown(event) {
+            event.stopPropagation();
+            const dropdown = document.getElementById('cityDropdownContent');
+            const toggle = document.getElementById('cityDropdownToggle');
+            
+            dropdown.classList.toggle('active');
+            toggle.classList.toggle('active');
+        }
+
+        function selectCity(key, name, event) {
+            event.stopPropagation();
+            state.currentRegion = key;
+            document.getElementById('currentRegionText').textContent = name;
+            document.getElementById('cityDropdownContent').classList.remove('active');
+            document.getElementById('cityDropdownToggle').classList.remove('active');
+            
+            document.querySelectorAll('.city-btn').forEach(btn => {
+                btn.classList.toggle('active', btn.dataset.key === key);
+            });
+            
+            renderCategoryEvents();
+            showToast(`已切换到：${name}`, 'info');
+        }
+
+        // ==========================================
+        // 认证功能 - 新增手机验证码
+        // ==========================================
+        function switchAuthTab(tab) {
+            const isLogin = tab === 'login';
+            document.getElementById('loginForm').classList.toggle('active', isLogin);
+            document.getElementById('registerForm').classList.toggle('active', !isLogin);
+            
+            document.querySelectorAll('.auth-tab').forEach((t, i) => {
+                t.classList.toggle('active', i === (isLogin ? 0 : 1));
+            });
+            
+            document.getElementById('authTitle').textContent = isLogin ? '欢迎回来' : '创建账号';
+            document.getElementById('authSubtitle').textContent = isLogin ? '登录您的账号以继续' : '注册以享受完整功能';
+        }
+
+        // 手机号验证
+        function validatePhone(input) {
+            // 只允许数字
+            input.value = input.value.replace(/\D/g, '');
+            // 限制11位
+            if (input.value.length > 11) {
+                input.value = input.value.slice(0, 11);
+            }
+        }
+
+        // 发送验证码
+        function sendVerifyCode(type) {
+            const phoneInput = document.getElementById(type === 'login' ? 'loginPhone' : 'registerPhone');
+            const phone = phoneInput.value;
+            const btn = document.getElementById(type === 'login' ? 'loginSendBtn' : 'registerSendBtn');
+            
+            // 验证手机号格式
+            if (!/^1[3-9]\d{9}$/.test(phone)) {
+                showToast('请输入正确的手机号', 'error');
+                phoneInput.focus();
+                return;
+            }
+            
+            // 检查是否正在倒计时
+            if (state.verifyCountdown[type] > 0) return;
+            
+            // 模拟发送验证码
+            showToast('验证码已发送：123456（演示用）', 'success');
+            
+            // 开始倒计时
+            let countdown = 60;
+            state.verifyCountdown[type] = countdown;
+            btn.disabled = true;
+            btn.classList.add('countdown');
+            btn.textContent = `${countdown}秒后重试`;
+            
+            const timer = setInterval(() => {
+                countdown--;
+                state.verifyCountdown[type] = countdown;
+                
+                if (countdown > 0) {
+                    btn.textContent = `${countdown}秒后重试`;
+                } else {
+                    clearInterval(timer);
+                    btn.disabled = false;
+                    btn.classList.remove('countdown');
+                    btn.textContent = '获取验证码';
+                    state.verifyCountdown[type] = 0;
+                }
+            }, 1000);
+            
+            // 自动填充演示验证码
+            setTimeout(() => {
+                const codeInput = document.getElementById(type === 'login' ? 'loginCode' : 'registerCode');
+                codeInput.value = '123456';
+                showToast('已自动填充演示验证码：123456', 'info');
+            }, 500);
+        }
+
+        function showCaptcha(event, action) {
+            event.preventDefault();
+            
+            // 验证手机号和验证码
+            const phoneInput = document.getElementById(action === 'login' ? 'loginPhone' : 'registerPhone');
+            const codeInput = document.getElementById(action === 'login' ? 'loginCode' : 'registerCode');
+            
+            if (!/^1[3-9]\d{9}$/.test(phoneInput.value)) {
+                showToast('请输入正确的手机号', 'error');
+                return;
+            }
+            
+            if (!/^\d{6}$/.test(codeInput.value)) {
+                showToast('请输入6位验证码', 'error');
+                return;
+            }
+            
+            // 演示验证码验证
+            if (codeInput.value !== '123456') {
+                showToast('验证码错误，演示请输入123456', 'error');
+                return;
+            }
+            
+            state.currentAuthAction = action;
+            state.captchaType = Math.random() > 0.5 ? 'slider' : 'colorblind';
+            
+            dom.captchaModal.classList.add('active');
+            
+            if (state.captchaType === 'slider') {
+                document.getElementById('sliderCaptcha').classList.add('active');
+                document.getElementById('colorblindCaptcha').classList.remove('active');
+                document.getElementById('captchaDesc').textContent = '请拖动滑块完成拼图验证';
+                setTimeout(initSliderCaptcha, 100);
+            } else {
+                document.getElementById('sliderCaptcha').classList.remove('active');
+                document.getElementById('colorblindCaptcha').classList.add('active');
+                document.getElementById('captchaDesc').textContent = '请点击所有包含指定数字的色块';
+                initColorblindCaptcha();
+            }
+        }
+
+        function closeCaptcha() {
+            dom.captchaModal.classList.remove('active');
+        }
+
+        // 滑动拼图验证
+        function initSliderCaptcha() {
+            const container = document.getElementById('sliderContainer');
+            const puzzle = document.getElementById('sliderPuzzle');
+            const target = document.getElementById('sliderTarget');
+            const btn = document.getElementById('sliderBtn');
+            
+            puzzle.style.left = '20px';
+            btn.style.transform = 'translateX(0)';
+            
+            let isDragging = false;
+            let startX = 0;
+            let currentX = 0;
+            const maxDistance = container.offsetWidth - 90;
+            const targetPos = Math.random() * (maxDistance - 100) + 50;
+            
+            target.style.right = 'auto';
+            target.style.left = targetPos + 'px';
+            
+            const startDrag = (e) => {
+                isDragging = true;
+                startX = e.type.includes('mouse') ? e.clientX : e.touches[0].clientX;
+                e.preventDefault();
+            };
+            
+            const drag = (e) => {
+                if (!isDragging) return;
+                e.preventDefault();
+                const x = e.type.includes('mouse') ? e.clientX : e.touches[0].clientX;
+                const diff = x - startX;
+                currentX = Math.max(0, Math.min(diff, maxDistance));
+                
+                puzzle.style.left = (20 + currentX) + 'px';
+                btn.style.transform = `translateX(${currentX}px)`;
+            };
+            
+            const endDrag = () => {
+                if (!isDragging) return;
+                isDragging = false;
+                
+                const puzzleLeft = parseInt(puzzle.style.left) || 20;
+                const targetLeft = parseInt(target.style.left);
+                
+                if (Math.abs(puzzleLeft - targetLeft) < 15) {
+                    puzzle.innerHTML = '<i class="fas fa-check"></i>';
+                    puzzle.style.boxShadow = '0 4px 15px rgba(16, 185, 129, 0.6)';
+                    setTimeout(() => {
+                        closeCaptcha();
+                        state.currentAuthAction === 'login' ? handleLogin() : handleRegister();
+                    }, 500);
+                } else {
+                    puzzle.style.transition = 'left 0.3s ease';
+                    btn.style.transition = 'transform 0.3s ease';
+                    puzzle.style.left = '20px';
+                    btn.style.transform = 'translateX(0)';
+                    setTimeout(() => {
+                        puzzle.style.transition = 'none';
+                        btn.style.transition = 'none';
+                    }, 300);
+                }
+            };
+            
+            btn.onmousedown = startDrag;
+            btn.ontouchstart = startDrag;
+            document.onmousemove = drag;
+            document.ontouchmove = drag;
+            document.onmouseup = endDrag;
+            document.ontouchend = endDrag;
+        }
+
+        // 色盲数字验证
+        let selectedIndices = [];
+        function initColorblindCaptcha() {
+            const grid = document.getElementById('colorblindGrid');
+            const targetNum = Math.floor(Math.random() * 9) + 1;
+            document.getElementById('targetNumber').textContent = targetNum;
+            
+            grid.innerHTML = '';
+            selectedIndices = [];
+            
+            const correctIndices = [];
+            while (correctIndices.length < 2) {
+                const idx = Math.floor(Math.random() * 9);
+                if (!correctIndices.includes(idx)) correctIndices.push(idx);
+            }
+            
+            for (let i = 0; i < 9; i++) {
+                const div = document.createElement('div');
+                div.className = 'colorblind-option';
+                const isCorrect = correctIndices.includes(i);
+                const num = isCorrect ? targetNum : getRandomNumExcept(targetNum);
+                
+                div.textContent = num;
+                div.dataset.num = num;
+                div.dataset.index = i;
+                div.onclick = () => selectColorblindOption(div, targetNum);
+                grid.appendChild(div);
+            }
+        }
+
+        function getRandomNumExcept(except) {
+            let num;
+            do {
+                num = Math.floor(Math.random() * 9) + 1;
+            } while (num === except);
+            return num;
+        }
+
+        function selectColorblindOption(element, targetNum) {
+            const num = parseInt(element.dataset.num);
+            const index = parseInt(element.dataset.index);
+            
+            if (num === targetNum) {
+                if (!selectedIndices.includes(index)) {
+                    selectedIndices.push(index);
+                    element.classList.add('selected');
+                    
+                    const allTargets = Array.from(document.querySelectorAll('.colorblind-option'))
+                        .filter(el => parseInt(el.dataset.num) === targetNum);
+                    
+                    if (selectedIndices.length === allTargets.length) {
+                        setTimeout(() => {
+                            closeCaptcha();
+                            state.currentAuthAction === 'login' ? handleLogin() : handleRegister();
+                        }, 500);
+                    }
+                }
+            } else {
+                element.classList.add('wrong');
+                setTimeout(() => element.classList.remove('wrong'), 500);
+                selectedIndices = [];
+                document.querySelectorAll('.colorblind-option').forEach(el => {
+                    el.classList.remove('selected');
+                });
+            }
+        }
+
+        function handleLogin() {
+            const phone = document.getElementById('loginPhone').value;
+            state.isLoggedIn = true;
+            dom.forceAuthOverlay.classList.remove('active');
+            
+            dom.loginNavBtn.classList.add('hidden');
+            dom.registerNavBtn.classList.add('hidden');
+            dom.userAvatar.classList.remove('hidden');
+            dom.userAvatar.textContent = phone.slice(-4);
+            
+            showToast('登录成功！欢迎回来。', 'success');
+        }
+
+        function handleRegister() {
+            const phone = document.getElementById('registerPhone').value;
+            const password = document.getElementById('registerPassword').value;
+            
+            if (password.length < 6) {
+                showToast('密码长度不能少于6位', 'error');
+                return;
+            }
+            
+            state.isLoggedIn = true;
+            dom.forceAuthOverlay.classList.remove('active');
+            
+            dom.loginNavBtn.classList.add('hidden');
+            dom.registerNavBtn.classList.add('hidden');
+            dom.userAvatar.classList.remove('hidden');
+            dom.userAvatar.textContent = phone.slice(-4);
+            
+            showToast('注册成功！欢迎加入EventAlert。', 'success');
+        }
+
+        function skipAuth() {
+            dom.forceAuthOverlay.classList.remove('active');
+        }
+
+        function showAuthModal(isRegister = false) {
+            dom.forceAuthOverlay.classList.add('active');
+            switchAuthTab(isRegister ? 'register' : 'login');
+        }
+
+        function logout() {
+            if (!confirm('确定要退出登录吗？')) return;
+            
+            state.isLoggedIn = false;
+            state.userReminders.clear();
+            state.vipRecords = {};
+            updateRemindersCount();
+            
+            dom.loginNavBtn.classList.remove('hidden');
+            dom.registerNavBtn.classList.remove('hidden');
+            dom.userAvatar.classList.add('hidden');
+            
+            showToast('已退出登录', 'info');
+            showHome();
+        }
+
+        // ==========================================
+        // 通用提醒设置功能 - 适用于所有活动类型
+        // ==========================================
+        function openReminderModal(eventId) {
+            if (!state.isLoggedIn) {
+                showToast('请先登录后再设置提醒！', 'warning');
+                showAuthModal();
+                return;
+            }
+
+            const event = eventsData.find(e => e.id === eventId);
+            if (!event) return;
+            
+            state.currentReminderEvent = event;
+            
+            // 恢复之前的设置
+            const existingReminder = state.userReminders.get(eventId);
+            if (existingReminder) {
+                state.selectedReminderTimes = [...existingReminder.times];
+                state.selectedReminderMethods = [...existingReminder.methods];
+            } else {
+                state.selectedReminderTimes = [7, 3, 1];
+                state.selectedReminderMethods = ['sms', 'email', 'push'];
+            }
+            
+            // 设置活动信息
+            document.getElementById('reminderEventTitle').textContent = event.title;
+            document.getElementById('reminderEventTime').textContent = formatDate(event.startDate) + ' ' + getCountdownText(event.startDate);
+            
+            // 设置图标
+            const iconMap = {
+                concert: 'fa-music',
+                marathon: 'fa-running',
+                exam: 'fa-graduation-cap',
+                vip: 'fa-crown'
+            };
+            document.getElementById('reminderEventIcon').innerHTML = `<i class="fas ${iconMap[event.category] || 'fa-calendar'}"></i>`;
+            
+            // 设置默认自定义时间（活动前一天）
+            const defaultCustomTime = new Date(event.startDate);
+            defaultCustomTime.setDate(defaultCustomTime.getDate() - 1);
+            document.getElementById('customReminderTime').value = formatDateTimeLocal(defaultCustomTime);
+            
+            // 更新时间选择按钮状态
+            document.querySelectorAll('.reminder-time-btn').forEach(btn => {
+                const days = parseInt(btn.dataset.days);
+                btn.classList.toggle('selected', state.selectedReminderTimes.includes(days));
+            });
+            
+            // 更新提醒方式按钮状态
+            document.querySelectorAll('.reminder-method-chip').forEach(chip => {
+                const method = chip.dataset.method;
+                chip.classList.toggle('selected', state.selectedReminderMethods.includes(method));
+            });
+            
+            dom.reminderModal.classList.add('active');
+            document.body.style.overflow = 'hidden';
+        }
+
+        function closeReminderModal() {
+            dom.reminderModal.classList.remove('active');
+            document.body.style.overflow = '';
+            state.currentReminderEvent = null;
+        }
+
+        function toggleReminderTime(days) {
+            const index = state.selectedReminderTimes.indexOf(days);
+            if (index > -1) {
+                state.selectedReminderTimes.splice(index, 1);
+            } else {
+                state.selectedReminderTimes.push(days);
+                state.selectedReminderTimes.sort((a, b) => b - a);
+            }
+            
+            document.querySelectorAll('.reminder-time-btn').forEach(btn => {
+                const btnDays = parseInt(btn.dataset.days);
+                btn.classList.toggle('selected', state.selectedReminderTimes.includes(btnDays));
+            });
+        }
+
+        function toggleReminderMethod(method) {
+            const index = state.selectedReminderMethods.indexOf(method);
+            if (index > -1) {
+                state.selectedReminderMethods.splice(index, 1);
+            } else {
+                state.selectedReminderMethods.push(method);
+            }
+            
+            document.querySelectorAll('.reminder-method-chip').forEach(chip => {
+                const chipMethod = chip.dataset.method;
+                chip.classList.toggle('selected', state.selectedReminderMethods.includes(chipMethod));
+            });
+        }
+
+        function saveReminder() {
+            if (!state.currentReminderEvent) return;
+            
+            const eventId = state.currentReminderEvent.id;
+            const customTime = document.getElementById('customReminderTime').value;
+            
+            // 保存详细设置
+            const reminderData = {
+                times: [...state.selectedReminderTimes],
+                methods: [...state.selectedReminderMethods],
+                customTime: customTime || null,
+                createdAt: new Date().toISOString()
+            };
+            
+            state.userReminders.set(eventId, reminderData);
+            
+            updateRemindersCount();
+            closeReminderModal();
+            
+            // 生成提醒时间描述
+            const timeDesc = state.selectedReminderTimes.sort((a, b) => b - a).map(d => {
+                if (d === 0) return '当天';
+                return `提前${d}天`;
+            }).join('、');
+            
+            const methodDesc = state.selectedReminderMethods.map(m => {
+                const names = { sms: '短信', email: '邮件', push: 'App推送', wechat: '微信' };
+                return names[m];
+            }).join('、');
+            
+            showToast(`✅ 已设置提醒：${timeDesc}通过${methodDesc}通知您`, 'success');
+            
+            // 刷新显示
+            if (document.getElementById('eventsPage').classList.contains('active')) {
+                renderCategoryEvents();
+            }
+            if (document.getElementById('myRemindersPage').classList.contains('active')) {
+                renderMyReminders();
+            }
+        }
+
+        // ==========================================
+        // VIP 记录功能
+        // ==========================================
+        function openVipRecordModal(eventId) {
+            if (!state.isLoggedIn) {
+                showToast('请先登录后再记录VIP！', 'warning');
+                showAuthModal();
+                return;
+            }
+
+            const event = eventsData.find(e => e.id === eventId);
+            if (!event) return;
+            
+            state.currentVipEvent = event;
+            state.selectedVipTier = 'month';
+            state.selectedVipReminders = [7, 3, 1];
+            
+            // 设置服务信息
+            document.getElementById('vipRecordServiceName').textContent = event.title;
+            document.getElementById('vipRecordServiceDesc').textContent = event.description;
+            document.getElementById('vipRecordIcon').innerHTML = `<i class="fas ${event.icon || 'fa-crown'}"></i>`;
+            
+            // 重置档位选择
+            document.querySelectorAll('.vip-tier-btn').forEach(btn => {
+                btn.classList.toggle('selected', btn.dataset.tier === 'month');
+            });
+            
+            // 重置提醒选择
+            document.querySelectorAll('.vip-reminder-chip').forEach(chip => {
+                const days = parseInt(chip.dataset.days);
+                chip.classList.toggle('selected', state.selectedVipReminders.includes(days));
+            });
+            
+            // 设置默认到期时间（一个月后）
+            const defaultExpiry = new Date();
+            defaultExpiry.setMonth(defaultExpiry.getMonth() + 1);
+            document.getElementById('vipExpiryDate').value = formatDateTimeLocal(defaultExpiry);
+            
+            // 显示/隐藏到期时间输入（永久会员不需要）
+            document.getElementById('vipDateSection').style.display = 'block';
+            
+            // 计算并显示
+            calculateVipRemaining();
+            
+            dom.vipRecordModal.classList.add('active');
+            document.body.style.overflow = 'hidden';
+        }
+
+        function closeVipRecordModal() {
+            dom.vipRecordModal.classList.remove('active');
+            document.body.style.overflow = '';
+            state.currentVipEvent = null;
+        }
+
+        function selectVipTier(tier) {
+            state.selectedVipTier = tier;
+            
+            document.querySelectorAll('.vip-tier-btn').forEach(btn => {
+                btn.classList.toggle('selected', btn.dataset.tier === tier);
+            });
+            
+            // 永久会员隐藏到期时间
+            const isForever = tier === 'forever';
+            document.getElementById('vipDateSection').style.display = isForever ? 'none' : 'block';
+            
+            if (!isForever) {
+                // 根据档位自动调整默认到期时间
+                const expiry = new Date();
+                const tierConfig = CONFIG.vipTiers[tier];
+                if (tierConfig.days > 0) {
+                    expiry.setDate(expiry.getDate() + tierConfig.days);
+                    document.getElementById('vipExpiryDate').value = formatDateTimeLocal(expiry);
+                }
+                calculateVipRemaining();
+            } else {
+                // 永久会员显示特殊状态
+                document.getElementById('calcTotalDays').textContent = '∞';
+                document.getElementById('calcRemainingDays').textContent = '∞';
+                document.getElementById('calcStatus').textContent = '永久';
+                document.getElementById('vipCalculation').querySelectorAll('.vip-calc-item').forEach(item => {
+                    item.classList.remove('urgent', 'warning');
+                });
+            }
+        }
+
+        function toggleVipReminder(days) {
+            const index = state.selectedVipReminders.indexOf(days);
+            if (index > -1) {
+                state.selectedVipReminders.splice(index, 1);
+            } else {
+                state.selectedVipReminders.push(days);
+                state.selectedVipReminders.sort((a, b) => b - a);
+            }
+            
+            document.querySelectorAll('.vip-reminder-chip').forEach(chip => {
+                const chipDays = parseInt(chip.dataset.days);
+                chip.classList.toggle('selected', state.selectedVipReminders.includes(chipDays));
+            });
+        }
+
+        function calculateVipRemaining() {
+            if (state.selectedVipTier === 'forever') return;
+            
+            const expiryDate = new Date(document.getElementById('vipExpiryDate').value);
+            const now = new Date();
+            
+            if (isNaN(expiryDate.getTime())) {
+                document.getElementById('calcTotalDays').textContent = '-';
+                document.getElementById('calcRemainingDays').textContent = '-';
+                document.getElementById('calcStatus').textContent = '-';
+                return;
+            }
+            
+            const totalDays = Math.ceil((expiryDate - now) / (1000 * 60 * 60 * 24));
+            const remainingDays = totalDays;
+            
+            // 计算总时长（从开通到到期）
+            const tierConfig = CONFIG.vipTiers[state.selectedVipTier];
+            const standardDays = tierConfig.days;
+            
+            document.getElementById('calcTotalDays').textContent = standardDays > 0 ? standardDays : totalDays;
+            document.getElementById('calcRemainingDays').textContent = remainingDays > 0 ? remainingDays : 0;
+            
+            // 状态判断
+            let statusText = '正常';
+            const calcItems = document.getElementById('vipCalculation').querySelectorAll('.vip-calc-item');
+            calcItems.forEach(item => item.classList.remove('urgent', 'warning'));
+            
+            if (remainingDays < 0) {
+                statusText = '已过期';
+                document.getElementById('calcStatus').textContent = statusText;
+                calcItems[2].classList.add('urgent');
+            } else if (remainingDays <= 3) {
+                statusText = '即将到期';
+                document.getElementById('calcStatus').textContent = statusText;
+                calcItems[2].classList.add('urgent');
+                calcItems[1].classList.add('urgent');
+            } else if (remainingDays <= 7) {
+                statusText = '即将到期';
+                document.getElementById('calcStatus').textContent = statusText;
+                calcItems[2].classList.add('warning');
+                calcItems[1].classList.add('warning');
+            } else {
+                document.getElementById('calcStatus').textContent = statusText;
+            }
+        }
+
+        function saveVipRecord() {
+            if (!state.currentVipEvent) return;
+            
+            const eventId = state.currentVipEvent.id;
+            const isForever = state.selectedVipTier === 'forever';
+            
+            const record = {
+                tier: state.selectedVipTier,
+                tierName: CONFIG.vipTiers[state.selectedVipTier].name,
+                expiryDate: isForever ? null : document.getElementById('vipExpiryDate').value,
+                reminders: [...state.selectedVipReminders],
+                recordedAt: new Date().toISOString()
+            };
+            
+            state.vipRecords[eventId] = record;
+            
+            // 同时添加到通用提醒
+            state.userReminders.set(eventId, {
+                times: [...state.selectedVipReminders],
+                methods: ['sms', 'email', 'push'],
+                customTime: null,
+                isVip: true
+            });
+            
+            updateRemindersCount();
+            closeVipRecordModal();
+            
+            const statusText = isForever ? '永久会员' : `到期时间：${formatDate(record.expiryDate)}`;
+            showToast(`✅ 已记录 ${state.currentVipEvent.title} ${statusText}`, 'success');
+            
+            // 刷新显示
+            if (document.getElementById('eventsPage').classList.contains('active')) {
+                renderCategoryEvents();
+            }
+            if (document.getElementById('myRemindersPage').classList.contains('active')) {
+                renderMyReminders();
+            }
+        }
+
+        // 获取VIP记录状态显示
+        function getVipStatusBadge(eventId) {
+            const record = state.vipRecords[eventId];
+            if (!record) return '';
+            
+            if (record.tier === 'forever') {
+                return '<span class="vip-status-badge active"><i class="fas fa-infinity"></i> 永久会员</span>';
+            }
+            
+            const daysLeft = getDaysLeft(record.expiryDate);
+            if (daysLeft < 0) {
+                return '<span class="vip-status-badge expired"><i class="fas fa-exclamation-circle"></i> 已过期</span>';
+            } else if (daysLeft <= 7) {
+                return `<span class="vip-status-badge expiring"><i class="fas fa-clock"></i> 剩${daysLeft}天</span>`;
+            } else {
+                return `<span class="vip-status-badge active"><i class="fas fa-check-circle"></i> 剩${daysLeft}天</span>`;
+            }
+        }
+
+        // ==========================================
+        // 定位功能
+        // ==========================================
+        function getCurrentLocation() {
+            const btn = document.getElementById('locationBtn');
+            const result = document.getElementById('locationResult');
+            
+            btn.classList.add('loading');
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> <span>定位中...</span>';
+            
+            if (!navigator.geolocation) {
+                showToast('您的浏览器不支持地理定位', 'error');
+                resetLocationBtn();
+                return;
+            }
+            
+            navigator.geolocation.getCurrentPosition(
+                (position) => {
+                    state.userLocation = {
+                        lat: position.coords.latitude,
+                        lng: position.coords.longitude
+                    };
+                    
+                    setTimeout(() => {
+                        const nearest = findNearestCity(state.userLocation.lat, state.userLocation.lng);
+                        
+                        btn.classList.remove('loading');
+                        btn.innerHTML = '<i class="fas fa-check"></i> <span>定位成功</span>';
+                        
+                        document.getElementById('locationText').textContent = `定位成功：${nearest.name}附近`;
+                        result.classList.add('active');
+                        
+                        document.getElementById('mapContainer').classList.add('active');
+                        document.getElementById('mapContainer').innerHTML = `
+                            <div style="text-align: center; color: var(--success);">
+                                <i class="fas fa-map-marker-alt" style="font-size: 3rem; margin-bottom: 1rem;"></i>
+                                <p style="font-size: 1.2rem; font-weight: 600;">您当前位置：${nearest.name}</p>
+                                <p style="font-size: 0.9rem; margin-top: 0.5rem; opacity: 0.8;">附近 ${countNearbyEvents(nearest.key)} 个活动</p>
+                            </div>
+                        `;
+                        
+                        searchNearbyEvents(nearest.key);
+                    }, 1500);
+                },
+                (error) => {
+                    showToast('定位失败：' + error.message, 'error');
+                    resetLocationBtn();
+                },
+                { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+            );
+        }
+
+        function resetLocationBtn() {
+            const btn = document.getElementById('locationBtn');
+            btn.classList.remove('loading');
+            btn.innerHTML = '<i class="fas fa-location-arrow"></i> <span>获取我的位置</span>';
+        }
+
+        function findNearestCity(lat, lng) {
+            let nearest = null;
+            let minDistance = Infinity;
+            
+            for (const [key, city] of Object.entries(cityCoordinates)) {
+                const distance = Math.sqrt(Math.pow(lat - city.lat, 2) + Math.pow(lng - city.lng, 2));
+                if (distance < minDistance) {
+                    minDistance = distance;
+                    nearest = { key, ...city };
+                }
+            }
+            return nearest;
+        }
+
+        function countNearbyEvents(cityKey) {
+            return eventsData.filter(e => e.region === cityKey || e.region === 'all').length;
+        }
+
+        function searchNearbyEvents(cityKey) {
+            const nearby = eventsData.filter(e => {
+                if (e.region === 'all') return true;
+                if (e.region === cityKey) return true;
+                if (e.coordinates && state.userLocation) {
+                    const dist = calculateDistance(
+                        state.userLocation.lat, state.userLocation.lng,
+                        e.coordinates.lat, e.coordinates.lng
+                    );
+                    return dist < 100;
+                }
+                return false;
+            });
+            
+            displaySearchResults(nearby, true);
+        }
+
+        // ==========================================
+        // 搜索功能
+        // ==========================================
+        function performSearch() {
+            const query = document.getElementById('mainSearchInput').value.toLowerCase().trim();
+            if (!query) {
+                document.getElementById('searchResults').innerHTML = '';
+                return;
+            }
+            
+            const results = eventsData.filter(event => 
+                event.title.toLowerCase().includes(query) ||
+                event.location.toLowerCase().includes(query) ||
+                event.description.toLowerCase().includes(query) ||
+                getCategoryName(event.category).includes(query)
+            );
+            
+            displaySearchResults(results, false);
+        }
+
+        function quickSearch(keyword) {
+            document.getElementById('mainSearchInput').value = keyword;
+            performSearch();
+        }
+
+        function displaySearchResults(results, showDistance) {
+            const container = document.getElementById('searchResults');
+            
+            if (results.length === 0) {
+                container.innerHTML = `
+                    <div class="empty-state" style="grid-column: 1/-1;">
+                        <i class="fas fa-search"></i>
+                        <h3>未找到相关活动</h3>
+                        <p>请尝试其他关键词或检查拼写</p>
+                    </div>
+                `;
+                return;
+            }
+            
+            container.innerHTML = results.map(event => {
+                const daysLeft = getDaysLeft(event.startDate);
+                let distanceHtml = '';
+                
+                if (showDistance && state.userLocation && event.coordinates) {
+                    const distance = calculateDistance(
+                        state.userLocation.lat, state.userLocation.lng,
+                        event.coordinates.lat, event.coordinates.lng
+                    );
+                    distanceHtml = `
+                        <div class="result-distance">
+                            <i class="fas fa-map-marker-alt"></i>
+                            ${distance < 1 ? (distance * 1000).toFixed(0) + 'm' : distance.toFixed(1) + 'km'}
+                        </div>
+                    `;
+                }
+                
+                const isVip = event.category === 'vip';
+                const vipBadge = isVip ? getVipStatusBadge(event.id) : '';
+                
+                // 判断点击行为：VIP打开VIP记录，其他活动打开提醒设置
+                const clickAction = isVip ? `openVipRecordModal(${event.id})` : `openReminderModal(${event.id})`;
+                
+                return `
+                    <div class="result-card" onclick="${clickAction}">
+                        <div class="result-header">
+                            <span class="result-category ${event.category}">${getCategoryName(event.category)}</span>
+                            ${distanceHtml}
+                        </div>
+                        <h3 class="result-title">${event.title}</h3>
+                        ${vipBadge}
+                        <div class="result-location">
+                            <i class="fas fa-map-marker-alt"></i>
+                            ${event.location}
+                        </div>
+                        <div class="result-date">
+                            <i class="fas fa-calendar"></i>
+                            ${isVip ? '点击记录会员信息' : formatDate(event.startDate) + ' · ' + getCountdownText(event.startDate)}
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        function getCategoryName(category) {
+            const names = {
+                concert: '演唱会',
+                marathon: '马拉松',
+                exam: '考试报名',
+                vip: 'VIP续费'
+            };
+            return names[category] || '';
+        }
+
+        // ==========================================
+        // 分类与事件展示
+        // ==========================================
+        function renderCategoryPreviews() {
+            const categories = ['concert', 'marathon', 'exam', 'vip'];
+            
+            categories.forEach(cat => {
+                const grid = document.getElementById(cat + 'Grid');
+                const catEvents = eventsData.filter(e => e.category === cat).slice(0, 4);
+                
+                grid.innerHTML = catEvents.map(event => {
+                    const isVip = cat === 'vip';
+                    const vipBadge = isVip ? getVipStatusBadge(event.id) : '';
+                    
+                    // 判断点击行为
+                    const clickAction = isVip ? `openVipRecordModal(${event.id})` : `openReminderModal(${event.id})`;
+                    
+                    return `
+                        <div class="category-card" onclick="${clickAction}">
+                            <div class="category-image ${event.category}">
+                                <i class="fas ${isVip ? (event.icon || 'fa-crown') : getCategoryIcon(event.category)}"></i>
+                            </div>
+                            <div class="category-content">
+                                <div class="category-name">${event.title}</div>
+                                ${vipBadge}
+                                <div class="category-count">${isVip ? '点击记录会员到期时间' : formatDate(event.startDate) + ' · ' + event.location}</div>
+                                <div class="category-tags">
+                                    <span class="category-tag">${isVip ? 'VIP管理' : getCountdownText(event.startDate)}</span>
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                }).join('');
+            });
+        }
+
+        function getCategoryIcon(category) {
+            const icons = {
+                concert: 'music',
+                marathon: 'running',
+                exam: 'graduation-cap',
+                vip: 'crown'
+            };
+            return icons[category] || 'calendar';
+        }
+
+        function showCategoryEvents(category) {
+            state.currentCategory = category;
+            document.getElementById('homePage').style.display = 'none';
+            document.getElementById('searchPage').classList.remove('active');
+            document.getElementById('eventsPage').classList.add('active');
+            document.getElementById('myRemindersPage').classList.remove('active');
+            
+            const categoryNames = {
+                concert: '演唱会',
+                marathon: '马拉松',
+                exam: '考试报名',
+                vip: 'VIP续费提醒'
+            };
+            
+            document.getElementById('eventsPageTitle').innerHTML = `
+                <i class="fas fa-${getCategoryIcon(category)}" style="color: ${getCategoryColor(category)};"></i>
+                ${categoryNames[category]}
+            `;
+            
+            state.currentRegion = 'all';
+            document.getElementById('currentRegionText').textContent = '全部地区';
+            document.querySelectorAll('.city-btn').forEach(btn => btn.classList.remove('active'));
+            
+            renderCategoryEvents();
+        }
+
+        function getCategoryColor(category) {
+            const colors = {
+                concert: '#ec4899',
+                marathon: '#10b981',
+                exam: '#3b82f6',
+                vip: '#f59e0b'
+            };
+            return colors[category] || '#6366f1';
+        }
+
+        function renderCategoryEvents() {
+            const grid = document.getElementById('categoryEventsGrid');
+            const filtered = eventsData.filter(event => {
+                const matchCategory = event.category === state.currentCategory;
+                const matchRegion = state.currentRegion === 'all' || event.region === state.currentRegion || event.region === 'all';
+                const matchSearch = event.title.toLowerCase().includes(state.searchQuery.toLowerCase());
+                return matchCategory && matchRegion && matchSearch;
+            });
+
+            if (filtered.length === 0) {
+                grid.innerHTML = `
+                    <div class="empty-state" style="grid-column: 1/-1;">
+                        <i class="fas fa-inbox"></i>
+                        <h3>暂无相关活动</h3>
+                        <p>请尝试切换地区或搜索其他关键词</p>
+                    </div>
+                `;
+                return;
+            }
+
+            grid.innerHTML = filtered.map(event => {
+                const daysLeft = getDaysLeft(event.startDate);
+                const isVip = event.category === 'vip';
+                const hasRecord = state.vipRecords[event.id];
+                const vipBadge = isVip ? getVipStatusBadge(event.id) : '';
+                
+                // 获取提醒设置状态
+                const reminderData = state.userReminders.get(event.id);
+                const hasReminder = reminderData !== undefined;
+                
+                let badgeClass = 'info';
+                let badgeText = '即将开始';
+                if (daysLeft <= 1) {
+                    badgeClass = 'urgent';
+                    badgeText = '即将截止';
+                } else if (daysLeft <= 7) {
+                    badgeClass = 'warning';
+                    badgeText = '火热报名中';
+                }
+
+                if (isVip) {
+                    return `
+                        <div class="event-card" data-id="${event.id}" onclick="openVipRecordModal(${event.id})">
+                            <div class="event-image" style="background: ${event.image};">
+                                <div class="event-badge ${hasRecord ? (getVipDaysLeft(event.id) <= 7 ? 'urgent' : 'info') : 'warning'}">
+                                    ${hasRecord ? getVipCountdownText(event.id) : '未记录'}
+                                </div>
+                            </div>
+                            <div class="event-content">
+                                <div class="event-meta">
+                                    <span><i class="fas fa-map-marker-alt"></i> ${event.location}</span>
+                                    <span><i class="fas fa-crown"></i> VIP服务</span>
+                                </div>
+                                <h3 class="event-title">${event.title}</h3>
+                                ${vipBadge}
+                                <p class="event-desc">${event.description}</p>
+                                <div class="event-footer">
+                                    <div class="countdown ${hasRecord && getVipDaysLeft(event.id) <= 7 ? 'urgent' : ''}">
+                                        ${hasRecord ? '已记录会员信息' : '点击记录会员到期时间'}
+                                    </div>
+                                    <button class="btn-vip-record" onclick="event.stopPropagation(); openVipRecordModal(${event.id})">
+                                        <i class="fas ${hasRecord ? 'fa-edit' : 'fa-plus'}"></i>
+                                        ${hasRecord ? '修改记录' : '记录VIP'}
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                }
+
+                // 普通活动卡片 - 使用新的提醒设置
+                return `
+                    <div class="event-card" data-id="${event.id}" onclick="openReminderModal(${event.id})">
+                        <div class="event-image" style="background: ${event.image};">
+                            <div class="event-badge ${badgeClass}">${badgeText}</div>
+                        </div>
+                        <div class="event-content">
+                            <div class="event-meta">
+                                <span><i class="fas fa-map-marker-alt"></i> ${event.location}</span>
+                                <span><i class="fas fa-calendar"></i> ${formatDate(event.startDate)}</span>
+                            </div>
+                            <h3 class="event-title">${event.title}</h3>
+                            <p class="event-desc">${event.description}</p>
+                            <div class="event-footer">
+                                <div class="countdown ${daysLeft <= 3 ? 'urgent' : daysLeft <= 7 ? 'warning' : ''}">
+                                    ${hasReminder ? '已设置提醒' : getCountdownText(event.startDate)}
+                                </div>
+                                <button class="btn-remind ${hasReminder ? 'active' : ''}" onclick="event.stopPropagation(); openReminderModal(${event.id})">
+                                    <i class="fas ${hasReminder ? 'fa-check' : 'fa-bell'}"></i>
+                                    ${hasReminder ? '已设置' : '提醒我'}
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        // VIP 辅助函数
+        function getVipDaysLeft(eventId) {
+            const record = state.vipRecords[eventId];
+            if (!record || record.tier === 'forever') return Infinity;
+            return getDaysLeft(record.expiryDate);
+        }
+
+        function getVipCountdownText(eventId) {
+            const record = state.vipRecords[eventId];
+            if (!record) return '未记录';
+            if (record.tier === 'forever') return '永久';
+            const days = getVipDaysLeft(eventId);
+            if (days < 0) return '已过期';
+            if (days === 0) return '今天到期';
+            return `剩${days}天`;
+        }
+
+        function filterCategoryEvents() {
+            state.searchQuery = document.getElementById('categorySearchInput').value;
+            renderCategoryEvents();
+        }
+
+        // ==========================================
+        // 事件详情
+        // ==========================================
+        function openEventDetail(eventId) {
+            const event = eventsData.find(e => e.id === eventId);
+            if (!event) return;
+
+            if (event.category === 'vip') {
+                openVipRecordModal(eventId);
+                return;
+            }
+
+            // 普通活动直接打开提醒设置
+            openReminderModal(eventId);
+        }
+
+        function closeEventDetail() {
+            dom.eventDetailModal.classList.remove('active');
+            document.body.style.overflow = '';
+        }
+
+        // ==========================================
+        // 页面导航
+        // ==========================================
+        function showHome() {
+            document.getElementById('homePage').style.display = 'block';
+            document.getElementById('searchPage').classList.remove('active');
+            document.getElementById('eventsPage').classList.remove('active');
+            document.getElementById('myRemindersPage').classList.remove('active');
+            
+            ['homeBtn', 'searchBtn', 'remindersBtn'].forEach((id, i) => {
+                document.getElementById(id).classList.toggle('active', i === 0);
+            });
+            
+            renderCategoryPreviews();
+        }
+
+        function showSearch() {
+            document.getElementById('homePage').style.display = 'none';
+            document.getElementById('searchPage').classList.add('active');
+            document.getElementById('eventsPage').classList.remove('active');
+            document.getElementById('myRemindersPage').classList.remove('active');
+            
+            ['homeBtn', 'searchBtn', 'remindersBtn'].forEach((id, i) => {
+                document.getElementById(id).classList.toggle('active', i === 1);
+            });
+        }
+
+        function showMyReminders() {
+            if (!state.isLoggedIn) {
+                showToast('请先登录后查看我的提醒！', 'warning');
+                showAuthModal();
+                return;
+            }
+
+            document.getElementById('homePage').style.display = 'none';
+            document.getElementById('searchPage').classList.remove('active');
+            document.getElementById('eventsPage').classList.remove('active');
+            document.getElementById('myRemindersPage').classList.add('active');
+            
+            ['homeBtn', 'searchBtn', 'remindersBtn'].forEach((id, i) => {
+                document.getElementById(id).classList.toggle('active', i === 2);
+            });
+            
+            renderMyReminders();
+        }
+
+        function renderMyReminders() {
+            const container = document.getElementById('remindersList');
+            
+            if (state.userReminders.size === 0) {
+                container.innerHTML = `
+                    <div class="empty-state">
+                        <i class="fas fa-bell-slash"></i>
+                        <h3>暂无提醒</h3>
+                        <p>您还没有设置任何提醒，快去首页添加吧！</p>
+                        <button class="btn-primary" style="margin-top: 2rem; width: auto; padding: 0.75rem 2rem;" onclick="showHome()">
+                            去添加提醒
+                        </button>
+                    </div>
+                `;
+                return;
+            }
+
+            // 合并所有提醒（包括VIP和普通活动）
+            const remindedEvents = [];
+            state.userReminders.forEach((reminderData, eventId) => {
+                const event = eventsData.find(e => e.id === eventId);
+                if (event) {
+                    remindedEvents.push({ event, reminderData });
+                }
+            });
+
+            // 按时间排序
+            remindedEvents.sort((a, b) => new Date(a.event.startDate) - new Date(b.event.startDate));
+            
+            container.innerHTML = `
+                <div class="events-grid">
+                    ${remindedEvents.map(({ event, reminderData }) => {
+                        const daysLeft = getDaysLeft(event.startDate);
+                        const isVip = event.category === 'vip';
+                        const record = isVip ? state.vipRecords[event.id] : null;
+                        
+                        // 生成提醒时间描述
+                        const timeDesc = reminderData.times ? reminderData.times.sort((a, b) => b - a).map(d => {
+                            if (d === 0) return '当天';
+                            return `提前${d}天`;
+                        }).join('、') : '未设置';
+                        
+                        const methodDesc = reminderData.methods ? reminderData.methods.map(m => {
+                            const names = { sms: '短信', email: '邮件', push: 'App推送', wechat: '微信' };
+                            return names[m] || m;
+                        }).join('、') : '短信、邮件';
+                        
+                        if (isVip && record) {
+                            // VIP 记录特殊显示
+                            const vipDays = record.tier === 'forever' ? Infinity : getDaysLeft(record.expiryDate);
+                            const statusClass = record.tier === 'forever' ? 'active' : vipDays < 0 ? 'expired' : vipDays <= 7 ? 'expiring' : 'active';
+                            const statusText = record.tier === 'forever' ? '永久会员' : vipDays < 0 ? '已过期' : `还剩 ${vipDays} 天`;
+                            
+                            return `
+                                <div class="event-card" data-id="${event.id}" onclick="openVipRecordModal(${event.id})">
+                                    <div class="event-image" style="background: ${event.image};">
+                                        <div class="event-badge ${statusClass === 'expiring' ? 'urgent' : 'info'}">
+                                            ${statusText}
+                                        </div>
+                                    </div>
+                                    <div class="event-content">
+                                        <div class="event-meta">
+                                            <span><i class="fas fa-crown"></i> ${record.tierName}</span>
+                                            <span><i class="fas fa-bell"></i> ${timeDesc}</span>
+                                        </div>
+                                        <h3 class="event-title">${event.title}</h3>
+                                        <p class="event-desc">${event.description}</p>
+                                        <div style="margin: 0.5rem 0; padding: 0.5rem; background: rgba(251,191,36,0.1); border-radius: 8px; font-size: 0.8rem; color: var(--vip-gold);">
+                                            <i class="fas fa-info-circle"></i> 提醒方式：${methodDesc}
+                                        </div>
+                                        <div class="event-footer">
+                                            <div class="countdown ${statusClass === 'expiring' ? 'urgent' : ''}">
+                                                ${record.tier === 'forever' ? '永久有效' : '到期：' + formatDate(record.expiryDate)}
+                                            </div>
+                                            <button class="btn-vip-record" onclick="event.stopPropagation(); openVipRecordModal(${event.id})">
+                                                <i class="fas fa-edit"></i> 修改
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                            `;
+                        }
+                        
+                        // 普通活动显示
+                        return `
+                            <div class="event-card" data-id="${event.id}" onclick="openReminderModal(${event.id})">
+                                <div class="event-image" style="background: ${event.image};">
+                                    <div class="event-badge ${daysLeft <= 1 ? 'urgent' : daysLeft <= 7 ? 'warning' : 'info'}">
+                                        ${getCountdownText(event.startDate)}
+                                    </div>
+                                </div>
+                                <div class="event-content">
+                                    <div class="event-meta">
+                                        <span><i class="fas fa-map-marker-alt"></i> ${event.location}</span>
+                                        <span><i class="fas fa-calendar"></i> ${formatDate(event.startDate)}</span>
+                                    </div>
+                                    <h3 class="event-title">${event.title}</h3>
+                                    <p class="event-desc">${event.description}</p>
+                                    <div style="margin: 0.5rem 0; padding: 0.5rem; background: rgba(99,102,241,0.1); border-radius: 8px; font-size: 0.8rem; color: var(--primary);">
+                                        <i class="fas fa-bell"></i> 提醒：${timeDesc} | 方式：${methodDesc}
+                                    </div>
+                                    <div class="event-footer">
+                                        <div class="countdown ${daysLeft <= 3 ? 'urgent' : daysLeft <= 7 ? 'warning' : ''}">
+                                            ${getCountdownText(event.startDate)}
+                                        </div>
+                                        <button class="btn-remind active" onclick="event.stopPropagation(); deleteReminder(${event.id})" style="background: var(--danger);">
+                                            <i class="fas fa-trash"></i> 删除提醒
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        `;
+                    }).join('')}
+                </div>
+            `;
+        }
+
+        function deleteReminder(eventId) {
+            if (!confirm('确定要删除这个提醒吗？')) return;
+            
+            state.userReminders.delete(eventId);
+            updateRemindersCount();
+            renderMyReminders();
+            showToast('提醒已删除', 'info');
+        }
+
+        function updateRemindersCount() {
+            const count = state.userReminders.size;
+            
+            if (count > 0) {
+                dom.navRemindersCount.textContent = count;
+                dom.navRemindersCount.classList.remove('hidden');
+                dom.pageRemindersCount.textContent = count;
+            } else {
+                dom.navRemindersCount.classList.add('hidden');
+                dom.pageRemindersCount.textContent = '0';
+            }
+        }
+
+        function updateCountdowns() {
+            // 刷新显示以更新倒计时
+            if (document.getElementById('eventsPage').classList.contains('active')) {
+                renderCategoryEvents();
+            }
+            if (document.getElementById('myRemindersPage').classList.contains('active')) {
+                renderMyReminders();
+            }
+        }
+
+        // 添加 CSS 动画
+        const style = document.createElement('style');
+        style.textContent = `
+            @keyframes slideDown {
+                from { transform: translate(-50%, -20px); opacity: 0; }
+                to { transform: translate(-50%, 0); opacity: 1; }
+            }
+            @keyframes slideUp {
+                from { transform: translate(-50%, 0); opacity: 1; }
+                to { transform: translate(-50%, -20px); opacity: 0; }
+            }
+        `;
+        document.head.appendChild(style);
+    </script>
+</body>
+</html>
